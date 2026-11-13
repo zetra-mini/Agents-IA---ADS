@@ -83,11 +83,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    llm_provider: ProviderName = "ollama"
+    llm_provider: ProviderName = "opencode"
 
-    # 1. OpenCode (prioritário local/gateway)
+    # 1. OpenCode (prioritário local/gateway - modelos 100% grátis)
     opencode_model: str = "opencode/mimo-v2.6-flash-free"
-    opencode_base_url: str = "http://host.docker.internal:4096/v1"
+    opencode_base_url: str = "http://127.0.0.1:4096/v1"
     opencode_api_key: str = "opencode"
 
     # 2. Ollama (100% Localhost)

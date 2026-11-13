@@ -12,7 +12,7 @@
 
   let apiOnline = $state(false);
   let providers = $state([]);
-  let selectedProvider = $state('ollama');
+  let selectedProvider = $state('opencode');
   let criativosLista = $state([]);
 
   // Estado da Conta Real & Hub (octaviosilva2/meta-ads + AdSimples)
@@ -36,7 +36,6 @@
 
   // Modal de Conexão da Conta Real
   let showConnectModal = $state(false);
-  let showNavDrawer = $state(false);
   let showChatDrawer = $state(false);
   let buscaCampanha = $state('');
   let filtroStatus = $state('TODAS'); // 'TODAS' | 'ACTIVE' | 'PAUSED'
@@ -240,7 +239,7 @@
       if (resProv.ok) {
         const p = await resProv.json();
         providers = p.providers || [];
-        selectedProvider = p.active_provider || 'ollama';
+        selectedProvider = p.active_provider || 'opencode';
         const pOpenai = providers.find((x) => x.id === 'openai');
         const pAnthropic = providers.find((x) => x.id === 'anthropic');
         const pGoogle = providers.find((x) => x.id === 'google');
@@ -682,6 +681,15 @@
       </div>
     </div>
 
+    <!-- CONTA META ATIVA NA SIDEBAR -->
+    <div class="sidebar-account-box" class:connected={connection.connected}>
+      <span class="conn-dot" class:connected={connection.connected}></span>
+      <div class="sidebar-acc-info">
+        <strong>{connection.selected_account_name || 'Conta dos anúncios'}</strong>
+        <code>{connection.selected_account_id || 'act_3339104319737592'}</code>
+      </div>
+    </div>
+
     <nav class="nav-list">
       <div class="nav-group-label">Campanhas & Operação</div>
 
@@ -811,7 +819,18 @@
         <span>Simulador Visual IA</span>
       </button>
 
-      <div class="nav-group-label">Sistema & Contas</div>
+      <div class="nav-group-label">Copiloto & Sistema</div>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={showChatDrawer}
+        onclick={() => (showChatDrawer = !showChatDrawer)}
+        title="Abrir Assistente Copiloto IA (Gaveta Lateral)"
+      >
+        <span class="nav-icon">💬</span>
+        <span>Assistente IA Copilot</span>
+      </button>
 
       <button
         type="button"
@@ -824,80 +843,21 @@
       </button>
     </nav>
 
-    <!-- RODAPÉ LIMPO E MINIMALISTA DA SIDEBAR -->
+    <!-- RODAPÉ DA SIDEBAR: MOTOR OPENCODE GRÁTIS + BACKEND -->
     <div class="sidebar-footer-minimal">
       <div class="status-dot-row">
         <span class="engine-dot-status ready"></span>
-        <span class="foot-text">Backend 8010 Online</span>
+        <span class="foot-text">⚡ OpenCode (Modelos Grátis)</span>
+      </div>
+      <div class="status-dot-row sub-status">
+        <span class="engine-dot-status" class:ready={apiOnline}></span>
+        <span class="foot-text">Backend 8010 {apiOnline ? 'Online' : 'Offline'}</span>
       </div>
     </div>
   </aside>
 
-  <!-- 2. ÁREA CENTRAL DE TRABALHO -->
+  <!-- 2. ÁREA CENTRAL DE TRABALHO: 100% LIMPA, ZERO POLUIÇÃO NO TOPO -->
   <div class="workspace">
-    <!-- BARRA SUPERIOR LIMPA EM 1 ÚNICA LINHA -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <button
-          type="button"
-          class="btn-top-ham"
-          class:active={showNavDrawer}
-          onclick={() => (showNavDrawer = !showNavDrawer)}
-          title="Abrir Gaveta de Navegação (☰)"
-        >
-          ☰
-        </button>
-        <div class="topbar-title-box">
-          <span class="topbar-section-title">
-            {#if activeNav === 'dashboard'}📊 Dashboard & Campanhas
-            {:else if activeNav === 'assistida'}🪄 Criação Assistida
-            {:else if activeNav === 'publicos'}👥 Loja de Públicos
-            {:else if activeNav === 'robo'}🤖 Robô Otimizador
-            {:else if activeNav === 'oak_brain'}🧠 Cérebro da Marca
-            {:else if activeNav === 'oak_anuncios'}✍️ Copy Meta Ads
-            {:else if activeNav === 'oak_reels'}🎬 Roteiros Reels & Zap
-            {:else if activeNav === 'oak_score'}🎯 Creative Score
-            {:else if activeNav === 'oak_espiao'}🕵️ Espionagem Concorrentes
-            {:else if activeNav === 'oak_mcp'}🔌 Segmentação Meta MCP
-            {:else if activeNav === 'oak_benchmarks'}📚 Benchmarks Brasil
-            {:else if activeNav === 'automacao'}🖱️ Simulador Visual IA
-            {:else if activeNav === 'configuracoes'}⚙️ Configurações & Contas
-            {:else}AdSimples AI
-            {/if}
-          </span>
-          <span class="topbar-conn-badge" class:connected={connection.connected}>
-            {#if connection.connected}
-              🟢 {connection.selected_account_name || 'Conta Conectada'} ({connection.selected_account_id})
-            {:else}
-              ⚪ Modo Demonstração
-            {/if}
-          </span>
-        </div>
-      </div>
-
-      <div class="topbar-actions">
-        <button
-          type="button"
-          class="btn-top ghost"
-          onclick={() => (showChatDrawer = !showChatDrawer)}
-          title="Abrir Assistente Copiloto IA"
-        >
-          💬 Assistente IA
-        </button>
-
-        <button
-          type="button"
-          class="btn-top"
-          class:primary={activeNav === 'configuracoes'}
-          class:ghost={activeNav !== 'configuracoes'}
-          onclick={() => (activeNav = 'configuracoes')}
-          title="Abrir Configurações de Contas & Motores de IA"
-        >
-          ⚙️ Configurações
-        </button>
-      </div>
-    </header>
-
     {#if toastMessage}
       <div class="toast-bar" class:error={toastType === 'error'}>
         <span>{toastType === 'error' ? '⚠️' : '✅'} {toastMessage}</span>
@@ -2142,252 +2102,7 @@
   </div>
 {/if}
 
-<!-- GAVETA LATERAL ESQUERDA (DESLIZA AO CLICAR NO ☰): MENU GERAL DE NAVEGAÇÃO -->
-{#if showNavDrawer}
-  <div class="modal-backdrop drawer-backdrop" role="presentation" onclick={() => (showNavDrawer = false)}>
-    <div
-      class="nav-drawer"
-      role="dialog"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.key === 'Escape' && (showNavDrawer = false)}
-    >
-      <div class="drawer-head">
-        <div class="drawer-brand">
-          <div class="brand-logo-mini">∞</div>
-          <div>
-            <strong>AdSimples AI</strong>
-            <div class="drawer-sub">Menu de Navegação</div>
-          </div>
-        </div>
-        <button type="button" class="modal-close" onclick={() => (showNavDrawer = false)} title="Fechar gaveta">✕</button>
-      </div>
 
-      <div class="drawer-content">
-        <div class="drawer-section-label">1. Operação & Campanhas</div>
-        <div class="drawer-links">
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'dashboard'}
-            onclick={() => {
-              activeNav = 'dashboard';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">📊</span>
-            <div>
-              <strong>Dashboard & Campanhas</strong>
-              <span>Resumo 7d, gráfico e tabela ({campanhas.length})</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'assistida'}
-            onclick={() => {
-              activeNav = 'assistida';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">🪄</span>
-            <div>
-              <strong>Criação Assistida</strong>
-              <span>Passo a passo com foto ou vídeo</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'publicos'}
-            onclick={() => {
-              activeNav = 'publicos';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">👥</span>
-            <div>
-              <strong>Loja de Públicos</strong>
-              <span>Públicos validados para aplicar em 1 clique</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'robo'}
-            onclick={() => {
-              activeNav = 'robo';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">🤖</span>
-            <div>
-              <strong>Robô Otimizador</strong>
-              <span>Escalar Winners e pausar Bleeders</span>
-            </div>
-          </button>
-        </div>
-
-        <div class="drawer-section-label">2. OpenAdKit & Meta MCP</div>
-        <div class="drawer-links">
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'oak_brain'}
-            onclick={() => {
-              activeNav = 'oak_brain';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">🧠</span>
-            <div>
-              <strong>Cérebro da Marca</strong>
-              <span>Extrair dados por URL e nichos</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'oak_anuncios'}
-            onclick={() => {
-              activeNav = 'oak_anuncios';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">✍️</span>
-            <div>
-              <strong>Copy Meta Ads</strong>
-              <span>3 ângulos de alta conversão</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'oak_reels'}
-            onclick={() => {
-              activeNav = 'oak_reels';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">🎬</span>
-            <div>
-              <strong>Roteiros Reels & Zap</strong>
-              <span>Ganchos de 3s e funil no WhatsApp</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'oak_score'}
-            onclick={() => {
-              activeNav = 'oak_score';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">🎯</span>
-            <div>
-              <strong>Creative Score (0–10)</strong>
-              <span>Nota das 5 alavancas e previsão CTR</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'oak_espiao'}
-            onclick={() => {
-              activeNav = 'oak_espiao';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">🕵️</span>
-            <div>
-              <strong>Espiar Concorrentes</strong>
-              <span>Steal & Beat na Biblioteca Meta</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'oak_mcp'}
-            onclick={() => {
-              activeNav = 'oak_mcp';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">🔌</span>
-            <div>
-              <strong>Segmentação Meta MCP</strong>
-              <span>Busca oficial Graph API de interesses</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'oak_benchmarks'}
-            onclick={() => {
-              activeNav = 'oak_benchmarks';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">📚</span>
-            <div>
-              <strong>Benchmarks & Copy</strong>
-              <span>Métricas de mercado Brasil e fórmulas</span>
-            </div>
-          </button>
-        </div>
-
-        <div class="drawer-section-label">3. Automação & Simulação</div>
-        <div class="drawer-links">
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'automacao'}
-            onclick={() => {
-              activeNav = 'automacao';
-              showNavDrawer = false;
-              setTimeout(() => simuladorRef?.iniciarDemonstracaoVisual(), 80);
-            }}
-          >
-            <span class="d-icon">🖱️</span>
-            <div>
-              <strong>Simulador Visual IA</strong>
-              <span>Demonstração de preenchimento autônomo</span>
-            </div>
-          </button>
-        </div>
-
-        <div class="drawer-section-label">4. Sistema & Configurações</div>
-        <div class="drawer-links">
-          <button
-            type="button"
-            class="drawer-link-btn"
-            class:active={activeNav === 'configuracoes'}
-            onclick={() => {
-              activeNav = 'configuracoes';
-              showNavDrawer = false;
-            }}
-          >
-            <span class="d-icon">⚙️</span>
-            <div>
-              <strong>Configurações & Contas</strong>
-              <span>BM, Token Meta, Sincronização e Motor IA</span>
-            </div>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   .app-shell {
@@ -2425,25 +2140,7 @@
     min-width: 0;
   }
 
-  .btn-top-ham {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    color: var(--text-secondary);
-    width: 30px;
-    height: 30px;
-    border-radius: 7px;
-    display: grid;
-    place-items: center;
-    font-size: 0.95rem;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
 
-  .btn-top-ham:hover {
-    color: #fff;
-    border-color: var(--primary-light);
-    background: rgba(37, 99, 235, 0.18);
-  }
 
   .brand-logo {
     width: 30px;
@@ -2585,233 +2282,72 @@
     color: var(--text-secondary);
   }
 
-  /* WORKSPACE CENTRAL */
+  /* CONTA ATIVA NA SIDEBAR */
+  .sidebar-account-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    margin: 4px 0 6px;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid var(--border);
+  }
+
+  .sidebar-account-box.connected {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.06);
+  }
+
+  .conn-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f59e0b;
+    flex-shrink: 0;
+  }
+
+  .conn-dot.connected {
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+  }
+
+  .sidebar-acc-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 1px;
+  }
+
+  .sidebar-acc-info strong {
+    font-size: 0.74rem;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sidebar-acc-info code {
+    font-size: 0.65rem;
+    color: #38bdf8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* WORKSPACE CENTRAL - 100% LIMPO E ESPAÇOSO (ZERO POLUIÇÃO NO TOPO) */
   .workspace {
     display: flex;
     flex-direction: column;
     min-width: 0;
     height: 100vh;
-    overflow: hidden;
-  }
-
-  .topbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 20px;
-    background: var(--bg-sidebar);
-    border-bottom: 1px solid var(--border);
-    min-height: 52px;
-  }
-
-  .topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-  }
-
-  .topbar-title-box {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .topbar-section-title {
-    font-size: 0.95rem;
-    font-weight: 800;
-    color: #fff;
-    letter-spacing: -0.01em;
-  }
-
-  .topbar-conn-badge {
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 3px 9px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
-  }
-
-  .topbar-conn-badge.connected {
-    background: rgba(16, 185, 129, 0.12);
-    border-color: rgba(16, 185, 129, 0.35);
-    color: #6ee7b7;
-  }
-
-  .topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-
-  .btn-top {
-    border-radius: 7px;
-    padding: 6px 12px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    border: 1px solid var(--border-strong);
-    transition: all 0.13s;
-  }
-
-  .btn-top.ghost {
-    background: var(--surface);
-    color: var(--text-secondary);
-  }
-
-  .btn-top.ghost:hover {
-    color: #fff;
-    border-color: var(--border);
-  }
-
-  .btn-top.primary {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary-light);
-  }
-
-  .btn-top.primary:hover {
-    background: #1d4ed8;
-  }
-
-  /* GAVETA LATERAL ESQUERDA (TIPO UMA GAVETA) */
-  .drawer-backdrop {
-    display: flex !important;
-    justify-content: flex-start !important;
-    align-items: stretch !important;
-    padding: 0 !important;
-  }
-
-  .nav-drawer {
-    width: 320px;
-    max-width: 85vw;
-    height: 100vh;
-    background: #0f172a;
-    border-right: 1px solid var(--border-strong);
-    display: flex;
-    flex-direction: column;
-    z-index: 1050;
-    box-shadow: 16px 0 48px rgba(0, 0, 0, 0.75);
-    animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     overflow-y: auto;
+    background: var(--bg-app);
   }
 
-  @keyframes slideInLeft {
-    from {
-      transform: translateX(-100%);
-    }
-    to {
-      transform: translateX(0);
-    }
-  }
-
-  .drawer-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    border-bottom: 1px solid var(--border);
-    background: #0b0f19;
-  }
-
-  .drawer-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .brand-logo-mini {
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
-    background: linear-gradient(135deg, #2563eb, #06b6d4);
-    display: grid;
-    place-items: center;
-    font-weight: 900;
-    font-size: 14px;
-    color: #fff;
-  }
-
-  .drawer-brand strong {
-    font-size: 0.92rem;
-    color: #fff;
-  }
-
-  .drawer-sub {
-    font-size: 0.68rem;
-    color: var(--muted);
-  }
-
-  .drawer-content {
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .drawer-section-label {
-    font-size: 0.66rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #60a5fa;
-    padding: 8px 6px 2px;
+  .sub-status {
     margin-top: 4px;
-  }
-
-  .drawer-links {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .drawer-link-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 12px;
-    border-radius: 8px;
-    border: 1px solid transparent;
-    background: rgba(255, 255, 255, 0.02);
-    color: var(--text);
-    text-align: left;
-    cursor: pointer;
-    transition: all 0.14s;
-    width: 100%;
-  }
-
-  .drawer-link-btn:hover {
-    background: var(--surface);
-    border-color: var(--border);
-  }
-
-  .drawer-link-btn.active {
-    background: rgba(37, 99, 235, 0.18);
-    border-color: rgba(59, 130, 246, 0.4);
-    color: #93c5fd;
-  }
-
-  .drawer-link-btn strong {
-    display: block;
-    font-size: 0.82rem;
-    color: #fff;
-  }
-
-  .drawer-link-btn span {
-    display: block;
-    font-size: 0.7rem;
-    color: var(--muted);
-    line-height: 1.25;
-  }
-
-  .d-icon {
-    font-size: 1.1rem;
-    flex-shrink: 0;
+    opacity: 0.85;
   }
 
   /* TOOLBAR E RECURSOS DO GERENCIADOR DE ANÚNCIOS (META ADS) */
