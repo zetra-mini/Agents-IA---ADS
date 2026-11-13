@@ -233,8 +233,20 @@
   {:else}
   <PainelAdSimples
     bind:this={painelAdSimplesRef}
+    criativosDisponiveis={criativosLista}
+    pastaCriativos={pastaCriativos}
     onAplicarPublico={(novaInstrucao) => {
       instrucao = novaInstrucao;
+    }}
+    onExecutarAssistidoNoNavegador={(planoAssistido) => {
+      resultado = {
+        ...(resultado || {}),
+        plano_campanha: planoAssistido,
+      };
+      setTimeout(() => {
+        simuladorRef?.iniciarDemonstracaoVisual();
+      }, 80);
+      abrirNavegadorDireto();
     }}
     validacaoPreflight={resultado?.validacao_preflight}
   />

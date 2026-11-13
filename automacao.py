@@ -957,3 +957,96 @@ async def abrir_navegador_direto(
             "resultado_navegador": f"Falha ao abrir navegador: {exc}",
             "erros": [str(exc)],
         }
+
+
+async def inspecionar_sessao_navegador_meta() -> dict[str, Any]:
+    """Lê diretamente da janela aberta do Playwright o ID da conta de anúncios (act=...),
+    o nome do Gerenciador/Conta e as campanhas visíveis na tabela real do Meta Ads Manager."""
+    global _persistent_context
+    import re
+
+    if _persistent_context is None:
+        return {
+            "conectado_navegador": False,
+            "autenticado_facebook": False,
+            "url_atual": "",
+            "account_id": None,
+            "account_name": None,
+            "business_name": None,
+            "campanhas_extraidas": [],
+            "mensagem": "Janela do navegador Playwright ainda não foi aberta.",
+        }
+
+    try:
+        pages = [pg for pg in _persistent_context.pages if not pg.is_closed()]
+        if not pages:
+            return {
+                "conectado_navegador": False,
+                "autenticado_facebook": False,
+                "url_atual": "",
+                "account_id": None,
+                "account_name": None,
+                "business_name": None,
+                "campanhas_extraidas": [],
+                "mensagem": "Nenhuma aba ativa na janela do Playwright.",
+            }
+
+        page = pages[-1]
+        url_atual = page.url or ""
+        em_login = "login" in url_atual.lower() or "checkpoint" in url_atual.lower()
+        match_act = re.search(r"[?&]act=(\d+)", url_atual)
+        act_id = f"act_{match_act.group(1)}" if match_act else None
+
+        dados_dom = {"account_name": None, "business_name": None, "campanhas": []}
+        if not em_login and "facebook.com" in url_atual.lower():
+            try:
+                dados_dom = await page.evaluate(
+                    """() => {
+                        const title = document.title || '';
+                        const accEl = document.querySelector('[aria-label*="Conta" i], [aria-label*="Account" i], [data-testid*="account" i]');
+                        const rows = Array.from(document.querySelectorAll('[role="row"]')).slice(1, 25);
+                        const camps = [];
+                        for (const r of rows) {
+                            const txt = (r.innerText || '').trim();
+                            if (txt && txt.length > 3 && !txt.startsWith('Campanha\n')) {
+                                const firstLine = txt.split('\\n')[0].trim();
+                                if (firstLine && firstLine.length > 2 && firstLine.length < 120) {
+                                    camps.push(firstLine);
+                                }
+                            }
+                        }
+                        return {
+                            account_name: accEl ? accEl.innerText.trim() : title,
+                            business_name: 'Meta Business Suite (Sessão Navegador)',
+                            campanhas: Array.from(new Set(camps)).slice(0, 15)
+                        };
+                    }"""
+                )
+            except Exception:
+                pass
+
+        return {
+            "conectado_navegador": True,
+            "autenticado_facebook": bool(not em_login and "adsmanager" in url_atual.lower()),
+            "url_atual": url_atual,
+            "account_id": act_id,
+            "account_name": dados_dom.get("account_name") or (f"Conta Meta ({act_id})" if act_id else None),
+            "business_name": dados_dom.get("business_name") or "Gerenciador Conectado via Navegador",
+            "campanhas_extraidas": dados_dom.get("campanhas", []),
+            "mensagem": (
+                f"Sessão autenticada detectada no Gerenciador ({act_id or 'Meta Ads'})."
+                if (not em_login and "adsmanager" in url_atual.lower())
+                else "Aba do navegador está aguardando login no Facebook para liberar sua conta real."
+            ),
+        }
+    except Exception as exc:
+        return {
+            "conectado_navegador": False,
+            "autenticado_facebook": False,
+            "url_atual": "",
+            "account_id": None,
+            "account_name": None,
+            "business_name": None,
+            "campanhas_extraidas": [],
+            "mensagem": f"Erro ao inspecionar navegador: {exc}",
+        }

@@ -11,7 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from agentes import CampanhaMetaAdsPlan, planejar_campanha
-from automacao import abrir_navegador_direto, executar_rascunho_meta_ads
+from automacao import (
+    abrir_navegador_direto,
+    executar_rascunho_meta_ads,
+    inspecionar_sessao_navegador_meta,
+)
 from criativos import (
     listar_criativos,
     resolver_pasta_criativos,
@@ -274,3 +278,100 @@ async def alterar_orcamento_campanha(campaign_id: str, body: OrcamentoCampanhaPa
         return await get_meta_hub().update_campaign_budget(campaign_id, body.daily_budget)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class ConectarTokenRequest(BaseModel):
+    access_token: str
+    account_id: str | None = None
+
+
+class SelecionarContaRequest(BaseModel):
+    account_id: str
+    account_name: str | None = None
+    business_name: str | None = None
+
+
+class ModoRealRequest(BaseModel):
+    somente_dados_reais: bool
+
+
+class ChatAssistidoRequest(BaseModel):
+    mensagem: str
+    plano_atual: dict[str, Any] | None = None
+    etapa_atual: int = 1
+    pasta_criativos: str | None = None
+
+
+class PublicarAssistidoRequest(BaseModel):
+    plano_campanha: CampanhaMetaAdsPlan
+    pasta_criativos: str | None = None
+
+
+@app.get("/meta/connection")
+async def obter_status_conexao_meta() -> dict[str, Any]:
+    """Retorna qual Gerenciador de Negócios (BM) e Conta de Anúncios (act_...) estão conectados."""
+    return get_meta_hub().get_connection_status()
+
+
+@app.post("/meta/connect-token")
+async def conectar_token_meta_api(body: ConectarTokenRequest) -> dict[str, Any]:
+    """Conecta o Access Token real da Meta Marketing API e descobre todas as Contas de Anúncios (act_...)."""
+    try:
+        return await get_meta_hub().connect_graph_token(body.access_token, body.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Falha ao conectar na Meta Graph API: {exc}") from exc
+
+
+@app.post("/meta/select-account")
+async def selecionar_conta_meta(body: SelecionarContaRequest) -> dict[str, Any]:
+    """Define qual Conta de Anúncios (act_...) e Gerenciador estão ativos no painel."""
+    try:
+        return get_meta_hub().select_ad_account(
+            body.account_id, body.account_name, body.business_name
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/meta/sync-browser")
+async def sincronizar_conta_do_navegador() -> dict[str, Any]:
+    """Inspeciona a aba aberta do Playwright no Meta Ads Manager e importa o act_... e campanhas reais."""
+    info_nav = await inspecionar_sessao_navegador_meta()
+    status_con = get_meta_hub().sync_from_browser_session(info_nav)
+    return {"navegador": info_nav, "connection": status_con}
+
+
+@app.post("/meta/real-mode")
+async def alternar_modo_somente_real(body: ModoRealRequest) -> dict[str, Any]:
+    """Ativa ou desativa a exibição exclusiva de dados reais (ocultando campanhas de demonstração)."""
+    return get_meta_hub().set_real_only_mode(body.somente_dados_reais)
+
+
+@app.post("/campanhas/assistida/chat")
+async def chat_criacao_assistida(body: ChatAssistidoRequest) -> dict[str, Any]:
+    """Processa instruções no Assistente de Criação de Campanha Passo a Passo."""
+    try:
+        criativos_info = _carregar_criativos(body.pasta_criativos)
+        return get_meta_hub().processar_mensagem_assistida(
+            mensagem=body.mensagem,
+            plano_atual=body.plano_atual,
+            etapa_atual=body.etapa_atual,
+            criativos_disponiveis=criativos_info["arquivos"],
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/campanhas/assistida/publicar-graph")
+async def publicar_campanha_assistida_graph(body: PublicarAssistidoRequest) -> dict[str, Any]:
+    """Cria a campanha revisada diretamente na Conta de Anúncios Real via Meta Graph API (PAUSED)."""
+    try:
+        criativos_info = _carregar_criativos(body.pasta_criativos)
+        caminhos = [item["caminho"] for item in criativos_info["arquivos"]]
+        return await get_meta_hub().criar_campanha_real_graph_api(body.plano_campanha, caminhos)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao criar na Graph API: {exc}") from exc

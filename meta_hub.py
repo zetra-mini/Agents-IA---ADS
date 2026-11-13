@@ -238,17 +238,175 @@ class MetaAdsHub:
         self._rng = random.Random(seed)
         self._ids = count(1001)
         self._campaigns: dict[str, CampaignItem] = {}
+        self._real_campaigns: dict[str, CampaignItem] = {}
         self._insights: dict[str, list[dict[str, Any]]] = {}
+        self._access_token: str = os.getenv("META_ACCESS_TOKEN", "").strip()
+        self._selected_account_id: str = os.getenv("META_AD_ACCOUNT_ID", "").strip()
+        self._selected_account_name: str = ""
+        self._business_name: str = ""
+        self._user_name: str = ""
+        self._available_accounts: list[dict[str, Any]] = []
+        self._connection_source: str = "graph" if (self._access_token and self._selected_account_id) else "disconnected"
+        self._somente_dados_reais: bool = False
         self._seed_initial_data()
 
     @property
     def mode(self) -> str:
-        token = os.getenv("META_ACCESS_TOKEN", "").strip()
-        account = os.getenv("META_AD_ACCOUNT_ID", "").strip()
-        env_mode = os.getenv("META_MODE", "mock").strip().lower()
-        if env_mode == "graph" and token and account:
-            return "graph"
+        if self._connection_source in {"graph", "browser"} and self._selected_account_id:
+            return self._connection_source
+        if self._somente_dados_reais:
+            return "real_empty"
         return "mock"
+
+    def get_connection_status(self) -> dict[str, Any]:
+        conectado = self._connection_source in {"graph", "browser"} and bool(self._selected_account_id)
+        return {
+            "connected": conectado,
+            "connection_source": self._connection_source,
+            "mode": self.mode,
+            "somente_dados_reais": self._somente_dados_reais,
+            "user_name": self._user_name or None,
+            "business_name": self._business_name or ("Não conectado" if not conectado else "Meta Business Suite"),
+            "selected_account_id": self._selected_account_id or None,
+            "selected_account_name": self._selected_account_name or None,
+            "available_accounts": self._available_accounts,
+            "has_token": bool(self._access_token),
+        }
+
+    def set_real_only_mode(self, somente_reais: bool) -> dict[str, Any]:
+        self._somente_dados_reais = bool(somente_reais)
+        return self.get_connection_status()
+
+    async def connect_graph_token(
+        self,
+        access_token: str,
+        account_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Valida o Access Token na Meta Graph API, lista todas as Contas de Anúncios e Gerenciadores (BM) do usuário."""
+        token = access_token.strip()
+        if not token:
+            raise ValueError("Informe um Meta Access Token válido.")
+
+        version = os.getenv("META_API_VERSION", "v22.0").strip()
+        async with httpx.AsyncClient(params={"access_token": token}, timeout=20.0) as client:
+            me_resp = await client.get(f"{GRAPH_HOST}/{version}/me", params={"fields": "id,name"})
+            if me_resp.status_code != 200:
+                detalhe = me_resp.json().get("error", {}).get("message", me_resp.text)
+                raise ValueError(f"Token rejeitado pela Meta Graph API: {detalhe}")
+            me_data = me_resp.json()
+
+            acc_resp = await client.get(
+                f"{GRAPH_HOST}/{version}/me/adaccounts",
+                params={
+                    "fields": "id,account_id,name,account_status,currency,business_name,amount_spent",
+                    "limit": 50,
+                },
+            )
+            acc_list = []
+            if acc_resp.status_code == 200:
+                for item in acc_resp.json().get("data", []):
+                    acc_list.append(
+                        {
+                            "id": item.get("id"),  # ex: act_123456
+                            "account_id": item.get("account_id"),
+                            "name": item.get("name") or item.get("id"),
+                            "business_name": item.get("business_name") or "Conta Pessoal / BM",
+                            "currency": item.get("currency", "BRL"),
+                            "account_status": item.get("account_status", 1),
+                        }
+                    )
+
+        self._access_token = token
+        self._user_name = me_data.get("name", "Usuário Meta Ads")
+        self._available_accounts = acc_list
+        self._connection_source = "graph"
+        self._somente_dados_reais = True
+
+        alvo_id = (account_id or "").strip()
+        if alvo_id and not alvo_id.startswith("act_"):
+            alvo_id = f"act_{alvo_id}"
+
+        escolhida = None
+        if alvo_id:
+            escolhida = next((a for a in acc_list if a["id"] == alvo_id), None)
+        if not escolhida and acc_list:
+            escolhida = acc_list[0]
+
+        if escolhida:
+            self._selected_account_id = escolhida["id"]
+            self._selected_account_name = escolhida["name"]
+            self._business_name = escolhida["business_name"]
+        elif alvo_id:
+            self._selected_account_id = alvo_id
+            self._selected_account_name = f"Conta {alvo_id}"
+            self._business_name = "Meta Business Manager"
+
+        return self.get_connection_status()
+
+    def select_ad_account(
+        self,
+        account_id: str,
+        account_name: str | None = None,
+        business_name: str | None = None,
+    ) -> dict[str, Any]:
+        acc_norm = account_id.strip()
+        if not acc_norm:
+            raise ValueError("Informe o ID da Conta de Anúncios (ex: act_123456789).")
+        if not acc_norm.startswith("act_"):
+            acc_norm = f"act_{acc_norm}"
+
+        encontrada = next((a for a in self._available_accounts if a["id"] == acc_norm), None)
+        self._selected_account_id = acc_norm
+        self._selected_account_name = (
+            account_name
+            or (encontrada["name"] if encontrada else f"Conta de Anúncios ({acc_norm})")
+        )
+        self._business_name = (
+            business_name
+            or (encontrada["business_name"] if encontrada else "Gerenciador de Negócios Meta")
+        )
+        if self._connection_source == "disconnected":
+            self._connection_source = "browser"
+        self._somente_dados_reais = True
+        return self.get_connection_status()
+
+    def sync_from_browser_session(self, info_nav: dict[str, Any]) -> dict[str, Any]:
+        """Sincroniza a conta real e campanhas lidas diretamente da aba autenticada do Playwright."""
+        act_id = info_nav.get("account_id")
+        if act_id:
+            self._selected_account_id = act_id
+            self._selected_account_name = info_nav.get("account_name") or f"Conta {act_id}"
+            self._business_name = info_nav.get("business_name") or "Gerenciador Conectado via Navegador"
+            self._connection_source = "browser"
+            self._somente_dados_reais = True
+            if not any(a["id"] == act_id for a in self._available_accounts):
+                self._available_accounts.append(
+                    {
+                        "id": act_id,
+                        "account_id": act_id.replace("act_", ""),
+                        "name": self._selected_account_name,
+                        "business_name": self._business_name,
+                        "currency": "BRL",
+                        "account_status": 1,
+                    }
+                )
+
+        for nome_camp in info_nav.get("campanhas_extraidas", []):
+            ja_existe = any(c.name == nome_camp for c in self._real_campaigns.values())
+            if not ja_existe:
+                cid = f"real_{next(self._ids)}"
+                self._real_campaigns[cid] = CampaignItem(
+                    id=cid,
+                    name=nome_camp,
+                    objective="OUTCOME_LEADS",
+                    status="ACTIVE",
+                    daily_budget=0.0,
+                    budget_type="CBO",
+                    locations=["Conta Real (Navegador)"],
+                    created_at=date.today().isoformat(),
+                    special_ad_category="Nenhuma",
+                )
+        return self.get_connection_status()
 
     def _seed_initial_data(self) -> None:
         seeds = [
@@ -419,12 +577,23 @@ class MetaAdsHub:
         novas = {cid: camp}
         novas.update(self._campaigns)
         self._campaigns = novas
-        self._insights[cid] = self._generate_series(plano.orcamento_diario_brl, 1.28, "ACTIVE")
-        return self._serialize_campaign(camp)
 
-    def _serialize_campaign(self, camp: CampaignItem) -> dict[str, Any]:
+        novas_reais = {cid: camp}
+        novas_reais.update(self._real_campaigns)
+        self._real_campaigns = novas_reais
+
+        self._insights[cid] = self._generate_series(plano.orcamento_diario_brl, 1.28, "ACTIVE")
+        return self._serialize_campaign(camp, is_real=True)
+
+    def _serialize_campaign(self, camp: CampaignItem, is_real: bool = False) -> dict[str, Any]:
         data = asdict(camp)
         data["ads_count"] = len(camp.ads)
+        data["is_real"] = is_real
+        data["origem_dados"] = (
+            f"CONTA REAL ({self._selected_account_id or 'Meta Ads'})"
+            if is_real
+            else "DEMONSTRAÇÃO LOCAL (Desconectado)"
+        )
         series_7d = self._insights.get(camp.id, [])[-7:]
         totals = _totals(series_7d, days=7)
         data["totals"] = totals
@@ -455,28 +624,97 @@ class MetaAdsHub:
                 return await self._graph_list_campaigns()
             except Exception:
                 pass
-        return [self._serialize_campaign(c) for c in self._campaigns.values()]
+        if self._somente_dados_reais or self.mode == "browser":
+            return [self._serialize_campaign(c, is_real=True) for c in self._real_campaigns.values()]
+        return [
+            self._serialize_campaign(c, is_real=(c.id in self._real_campaigns))
+            for c in self._campaigns.values()
+        ]
 
     async def update_campaign_status(self, campaign_id: str, status: str) -> dict[str, Any]:
         status_norm = status.upper()
         if status_norm not in {"ACTIVE", "PAUSED"}:
             raise ValueError("Status deve ser ACTIVE ou PAUSED.")
-        camp = self._campaigns.get(campaign_id)
+        if self.mode == "graph" and self._access_token:
+            version = os.getenv("META_API_VERSION", "v22.0").strip()
+            async with httpx.AsyncClient(params={"access_token": self._access_token}, timeout=20.0) as client:
+                resp = await client.post(
+                    f"{GRAPH_HOST}/{version}/{campaign_id}",
+                    data={"status": status_norm},
+                )
+                resp.raise_for_status()
+        camp = self._real_campaigns.get(campaign_id) or self._campaigns.get(campaign_id)
         if not camp:
             raise ValueError(f"Campanha '{campaign_id}' não encontrada.")
         camp.status = status_norm
         for ad in camp.ads:
             ad.status = status_norm
-        return self._serialize_campaign(camp)
+        return self._serialize_campaign(camp, is_real=(campaign_id in self._real_campaigns))
 
     async def update_campaign_budget(self, campaign_id: str, daily_budget: float) -> dict[str, Any]:
         if daily_budget < 6.0:
             raise ValueError("O orçamento diário mínimo é R$ 6,00.")
-        camp = self._campaigns.get(campaign_id)
+        if self.mode == "graph" and self._access_token:
+            version = os.getenv("META_API_VERSION", "v22.0").strip()
+            async with httpx.AsyncClient(params={"access_token": self._access_token}, timeout=20.0) as client:
+                resp = await client.post(
+                    f"{GRAPH_HOST}/{version}/{campaign_id}",
+                    data={"daily_budget": str(int(round(daily_budget * 100)))},
+                )
+                resp.raise_for_status()
+        camp = self._real_campaigns.get(campaign_id) or self._campaigns.get(campaign_id)
         if not camp:
             raise ValueError(f"Campanha '{campaign_id}' não encontrada.")
         camp.daily_budget = round(daily_budget, 2)
-        return self._serialize_campaign(camp)
+        return self._serialize_campaign(camp, is_real=(campaign_id in self._real_campaigns))
+
+    async def criar_campanha_real_graph_api(
+        self,
+        plano: CampanhaMetaAdsPlan,
+        caminhos_criativos: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Cria a campanha diretamente na conta real da Meta via Graph API (status=PAUSED)."""
+        if not self._access_token or not self._selected_account_id:
+            raise ValueError(
+                "Para publicar direto via Meta Graph API, conecte seu Meta Access Token e selecione uma Conta de Anúncios (act_...) no topo da tela."
+            )
+
+        version = os.getenv("META_API_VERSION", "v22.0").strip()
+        obj_meta = OBJECTIVE_MAP_PT_TO_META.get(plano.objetivo.lower(), "OUTCOME_LEADS")
+        cat_raw = (plano.categoria_especial_anuncio or "").lower()
+        special_cats = '["CREDIT"]' if ("crédito" in cat_raw or "credito" in cat_raw) else "[]"
+
+        async with httpx.AsyncClient(params={"access_token": self._access_token}, timeout=25.0) as client:
+            payload_camp: dict[str, Any] = {
+                "name": plano.nome_campanha,
+                "objective": obj_meta,
+                "status": "PAUSED",
+                "special_ad_categories": special_cats,
+            }
+            if plano.tipo_orcamento.upper() == "CBO":
+                payload_camp["daily_budget"] = str(int(round(plano.orcamento_diario_brl * 100)))
+
+            resp = await client.post(
+                f"{GRAPH_HOST}/{version}/{self._selected_account_id}/campaigns",
+                data=payload_camp,
+            )
+            if resp.status_code != 200:
+                erro_msg = resp.json().get("error", {}).get("message", resp.text)
+                raise ValueError(f"Erro da Meta Graph API ao criar campanha: {erro_msg}")
+            camp_id = resp.json().get("id")
+
+        registrada = self.registrar_campanha_do_plano(plano, caminhos_criativos)
+        registrada["id"] = camp_id or registrada["id"]
+        registrada["origem_dados"] = f"CRIADA NA META GRAPH API ({self._selected_account_id})"
+        return {
+            "sucesso": True,
+            "campaign_id": camp_id,
+            "account_id": self._selected_account_id,
+            "account_name": self._selected_account_name,
+            "status": "PAUSED",
+            "campanha": registrada,
+            "mensagem": f"Campanha '{plano.nome_campanha}' criada com sucesso na sua conta real {self._selected_account_id} (ID: {camp_id}, Status: PAUSED)!",
+        }
 
     async def get_copilot_report(self) -> dict[str, Any]:
         """Gera o relatório completo estilo Hackr Ads Robô + TheMattBerman/meta-ads-kit (5 Daily Questions)."""
@@ -533,6 +771,7 @@ class MetaAdsHub:
 
         return {
             "mode": self.mode,
+            "connection": self.get_connection_status(),
             "summary_7d": {
                 "spend_7d": total_spend_7d,
                 "conversions_7d": total_conv_7d,
@@ -553,9 +792,151 @@ class MetaAdsHub:
             "fatigue_alerts": fatigue_alerts,
         }
 
+    def processar_mensagem_assistida(
+        self,
+        mensagem: str,
+        plano_atual: dict[str, Any] | None = None,
+        etapa_atual: int = 1,
+        criativos_disponiveis: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Motor conversacional da Criação de Campanha Assistida: interpreta comandos em linguagem natural,
+        atualiza o plano passo a passo e guia o usuário até a publicação."""
+        import re
+        from agentes import gerar_plano_fallback_deterministico
+
+        msg = (mensagem or "").strip()
+        msg_lower = msg.lower()
+
+        if not plano_atual:
+            plano_obj = gerar_plano_fallback_deterministico(
+                msg if len(msg) >= 8 else "Criar campanha CBO de leads para repasse de financiamento, R$ 500/dia, para Campo Largo e Curitiba",
+                criativos_disponiveis,
+            )
+        else:
+            plano_obj = CampanhaMetaAdsPlan.model_validate(plano_atual)
+
+        alteracoes: list[str] = []
+
+        # 1. Orçamento (ex: "R$ 300", "350 por dia", "orçamento 200")
+        m_budget = re.search(r"(?:r\$\s*|or[cç]amento\s*(?:de)?\s*|verba\s*(?:de)?\s*)(\d+(?:[.,]\d+)?)", msg_lower)
+        if not m_budget:
+            m_budget = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:/dia|por dia|reais)", msg_lower)
+        if m_budget:
+            novo_val = float(m_budget.group(1).replace(",", "."))
+            if novo_val >= 6.0:
+                plano_obj.orcamento_diario_brl = novo_val
+                alteracoes.append(f"Orçamento diário ajustado para R$ {novo_val:.2f}/dia")
+
+        # 2. Tipo de orçamento CBO / ABO
+        if "abo" in msg_lower.split():
+            plano_obj.tipo_orcamento = "ABO"
+            alteracoes.append("Tipo de orçamento alterado para ABO (no conjunto)")
+        elif "cbo" in msg_lower.split():
+            plano_obj.tipo_orcamento = "CBO"
+            alteracoes.append("Tipo de orçamento alterado para CBO (Advantage+)")
+
+        # 3. Objetivo
+        if any(w in msg_lower for w in ("venda", "vendas", "conversão", "ecommerce", "loja")):
+            plano_obj.objetivo = "Vendas"
+            alteracoes.append("Objetivo definido como Vendas")
+        elif any(w in msg_lower for w in ("tráfego", "trafego", "clique", "visita")):
+            plano_obj.objetivo = "Trafego"
+            alteracoes.append("Objetivo definido como Tráfego")
+        elif any(w in msg_lower for w in ("engajamento", "mensagem", "direct")):
+            plano_obj.objetivo = "Engajamento"
+            alteracoes.append("Objetivo definido como Engajamento")
+        elif any(w in msg_lower for w in ("lead", "leads", "cadastro", "whatsapp")):
+            plano_obj.objetivo = "Leads"
+            alteracoes.append("Objetivo definido como Leads (Cadastros/WhatsApp)")
+
+        # 4. Faixa etária (ex: "25 a 55", "idade 22 até 48")
+        m_age = re.search(r"(?:idade\s*)?(\d{2})\s*(?:a|até|ate|-)\s*(\d{2})", msg_lower)
+        if m_age and plano_obj.conjuntos:
+            id_min = max(18, min(65, int(m_age.group(1))))
+            id_max = max(id_min, min(65, int(m_age.group(2))))
+            plano_obj.conjuntos[0].publico.idade_minima = id_min
+            plano_obj.conjuntos[0].publico.idade_maxima = id_max
+            alteracoes.append(f"Faixa etária ajustada para {id_min} a {id_max} anos")
+
+        # 5. Raio km (ex: "raio 30km", "15 km")
+        m_raio = re.search(r"(\d{1,2})\s*km", msg_lower)
+        if m_raio and plano_obj.conjuntos:
+            r_km = max(5, min(80, int(m_raio.group(1))))
+            plano_obj.conjuntos[0].publico.raio_km = r_km
+            alteracoes.append(f"Raio geográfico ajustado para {r_km} km")
+
+        # 6. Cidades conhecidas ou "cidades: X, Y"
+        m_cidades = re.search(r"(?:cidades?|localiza[cç][aã]o|para|em)\s*:\s*([^\n.;]+)", msg, flags=re.IGNORECASE)
+        if m_cidades and plano_obj.conjuntos:
+            novas_cids = [c.strip() for c in re.split(r"[,e]", m_cidades.group(1)) if len(c.strip()) >= 3]
+            if novas_cids:
+                plano_obj.conjuntos[0].publico.localizacoes = novas_cids
+                plano_obj.conjuntos[0].nome = f"Conjunto 01 - {', '.join(novas_cids[:2])}"
+                alteracoes.append(f"Localizações atualizadas para: {', '.join(novas_cids)}")
+        else:
+            cidades_catalogo = [
+                "Campo Largo",
+                "Curitiba",
+                "São José dos Pinhais",
+                "Araucária",
+                "Colombo",
+                "Pinhais",
+                "Ponta Grossa",
+                "Londrina",
+                "Maringá",
+                "Joinville",
+                "Florianópolis",
+                "São Paulo",
+            ]
+            encontradas = [c for c in cidades_catalogo if c.lower() in msg_lower]
+            if encontradas and plano_obj.conjuntos:
+                plano_obj.conjuntos[0].publico.localizacoes = encontradas
+                plano_obj.conjuntos[0].nome = f"Conjunto 01 - {', '.join(encontradas[:2])}"
+                alteracoes.append(f"Cidades detectadas e aplicadas: {', '.join(encontradas)}")
+
+        # 7. Alteração de Título / Copy se mencionado
+        m_titulo = re.search(r"t[ií]tulo\s*:\s*([^\n]+)", msg, flags=re.IGNORECASE)
+        if m_titulo and plano_obj.anuncios:
+            plano_obj.anuncios[0].titulo = m_titulo.group(1).strip()
+            alteracoes.append(f"Título do anúncio alterado para '{plano_obj.anuncios[0].titulo}'")
+
+        m_copy = re.search(r"(?:texto|copy)\s*:\s*([^\n]+)", msg, flags=re.IGNORECASE)
+        if m_copy and plano_obj.anuncios:
+            plano_obj.anuncios[0].texto_principal = m_copy.group(1).strip()
+            alteracoes.append("Texto principal (Copy) atualizado conforme solicitado")
+
+        # Caso seja uma instrução completa nova (sem comandos específicos mas > 15 chars na etapa 1)
+        if not alteracoes and len(msg) > 15 and etapa_atual == 1:
+            plano_obj = gerar_plano_fallback_deterministico(msg, criativos_disponiveis)
+            alteracoes.append(f"Estrutura completa gerada para '{plano_obj.nome_campanha}'")
+
+        proxima_etapa = min(4, etapa_atual + 1) if alteracoes else etapa_atual
+        caminhos = [c["caminho"] for c in (criativos_disponiveis or []) if "caminho" in c]
+        validacao = validar_campanha_preflight(plano_obj, caminhos)
+
+        resumo_alteracoes = (
+            "✅ Atualizei na campanha: " + "; ".join(alteracoes) + "."
+            if alteracoes
+            else "Estrutura mantida e revisada."
+        )
+        guia_etapa = {
+            1: "Etapa 1 confirmada (Objetivo e Orçamento). Agora na Etapa 2 confira as cidades, faixa etária e interesses ou peça alterações aqui no chat.",
+            2: "Etapa 2 revisada (Público e Conjunto de Anúncios). Na Etapa 3 confira o criativo da pasta local e os textos do Copywriter.",
+            3: "Etapa 3 pronta (Criativo e Copy). Na Etapa 4 faça a revisão final e clique em 'Criar na Minha Conta Real (Graph API)' ou 'Criar Assistido no Navegador'.",
+            4: "Tudo pronto na Etapa 4! Você já pode disparar a criação real na sua Conta de Anúncios ou pelo Navegador Assistido.",
+        }.get(proxima_etapa, "")
+
+        return {
+            "plano_campanha": plano_obj.model_dump(),
+            "resposta_assistente": f"{resumo_alteracoes}\n{guia_etapa}",
+            "etapa_sugerida": proxima_etapa,
+            "alteracoes_aplicadas": alteracoes,
+            "validacao_preflight": validacao,
+        }
+
     async def _graph_list_campaigns(self) -> list[dict[str, Any]]:
-        token = os.getenv("META_ACCESS_TOKEN", "").strip()
-        account = os.getenv("META_AD_ACCOUNT_ID", "").strip()
+        token = self._access_token or os.getenv("META_ACCESS_TOKEN", "").strip()
+        account = self._selected_account_id or os.getenv("META_AD_ACCOUNT_ID", "").strip()
         version = os.getenv("META_API_VERSION", "v22.0").strip()
         async with httpx.AsyncClient(params={"access_token": token}, timeout=20.0) as client:
             resp = await client.get(
@@ -575,14 +956,16 @@ class MetaAdsHub:
                         "status": item.get("status", "PAUSED"),
                         "daily_budget": budget,
                         "budget_type": "CBO" if budget > 0 else "ABO",
-                        "locations": ["Conta Meta Graph API"],
+                        "locations": [f"Conta Real ({account})"],
                         "created_at": item.get("created_time", "")[:10],
                         "special_ad_category": "Nenhuma",
                         "ads_count": 1,
+                        "is_real": True,
+                        "origem_dados": f"CONTA REAL GRAPH API ({account})",
                         "totals": _totals([], 7),
-                        "health_tag": "🌐 CONTA REAL GRAPH API",
-                        "health_color": "info",
-                        "recomendacao_ia": "Campanha sincronizada diretamente da Meta Graph API.",
+                        "health_tag": "🟢 CONTA REAL GRAPH API",
+                        "health_color": "success",
+                        "recomendacao_ia": f"Sincronizada da sua conta real {self._selected_account_name or account}.",
                     }
                 )
             return result
