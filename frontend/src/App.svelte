@@ -40,6 +40,27 @@
   let accountNameInput = $state('');
   let conectandoConta = $state(false);
 
+  // Modal de Chaves de API Externa & Motores de IA
+  let showApiKeysModal = $state(false);
+  let salvandoKeys = $state(false);
+  let openaiKeyInput = $state('');
+  let openaiModelInput = $state('gpt-4o');
+  let anthropicKeyInput = $state('');
+  let anthropicModelInput = $state('claude-sonnet-4-6');
+  let geminiKeyInput = $state('');
+  let geminiModelInput = $state('gemini-2.5-flash');
+  let ollamaModelInput = $state('qwen2.5:0.5b');
+  let ollamaUrlInput = $state('http://127.0.0.1:11434');
+  let opencodeModelInput = $state('opencode/mimo-v2.6-flash-free');
+
+  const activeProviderMeta = $derived(
+    providers.find((p) => p.id === selectedProvider) || {
+      id: selectedProvider,
+      configured: selectedProvider === 'ollama' || selectedProvider === 'opencode',
+      requires_api_key: ['openai', 'anthropic', 'google'].includes(selectedProvider),
+    }
+  );
+
   // Toast / Notificações discretas
   let toastMessage = $state('');
   let toastType = $state('ok'); // 'ok' | 'error'
@@ -154,6 +175,17 @@
         const p = await resProv.json();
         providers = p.providers || [];
         selectedProvider = p.active_provider || 'ollama';
+        const pOpenai = providers.find((x) => x.id === 'openai');
+        const pAnthropic = providers.find((x) => x.id === 'anthropic');
+        const pGoogle = providers.find((x) => x.id === 'google');
+        const pOllama = providers.find((x) => x.id === 'ollama');
+        const pOpencode = providers.find((x) => x.id === 'opencode');
+        if (pOpenai?.model) openaiModelInput = pOpenai.model;
+        if (pAnthropic?.model) anthropicModelInput = pAnthropic.model;
+        if (pGoogle?.model) geminiModelInput = pGoogle.model;
+        if (pOllama?.model) ollamaModelInput = pOllama.model;
+        if (pOllama?.base_url) ollamaUrlInput = pOllama.base_url;
+        if (pOpencode?.model) opencodeModelInput = pOpencode.model;
       }
       if (resCon.ok) connection = await resCon.json();
       if (resCamp.ok) campanhas = await resCamp.json();
@@ -210,6 +242,67 @@
       notify(err.message, 'error');
     } finally {
       conectandoConta = false;
+    }
+  }
+
+  async function aoSelecionarMotorIA(e) {
+    const novo = e.target.value;
+    selectedProvider = novo;
+    const info = providers.find((p) => p.id === novo);
+    if (info && info.requires_api_key && !info.configured) {
+      showApiKeysModal = true;
+      notify(`Informe a API Key para ativar o motor ${info.label}.`);
+      return;
+    }
+    try {
+      const res = await fetch('/api/providers/configure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active_provider: novo }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        providers = data.providers || [];
+        selectedProvider = data.active_provider || novo;
+        notify(`Motor de IA ativo alterado para: ${info?.label || novo}`);
+      }
+    } catch (_) {}
+  }
+
+  async function salvarChavesApi() {
+    salvandoKeys = true;
+    try {
+      const payload = {
+        active_provider: selectedProvider,
+        openai_model: openaiModelInput.trim() || undefined,
+        anthropic_model: anthropicModelInput.trim() || undefined,
+        gemini_model: geminiModelInput.trim() || undefined,
+        ollama_model: ollamaModelInput.trim() || undefined,
+        ollama_base_url: ollamaUrlInput.trim() || undefined,
+        opencode_model: opencodeModelInput.trim() || undefined,
+      };
+      if (openaiKeyInput.trim()) payload.openai_api_key = openaiKeyInput.trim();
+      if (anthropicKeyInput.trim()) payload.anthropic_api_key = anthropicKeyInput.trim();
+      if (geminiKeyInput.trim()) payload.gemini_api_key = geminiKeyInput.trim();
+
+      const res = await fetch('/api/providers/configure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Erro ao salvar chaves de API.');
+      providers = data.providers || [];
+      selectedProvider = data.active_provider || selectedProvider;
+      openaiKeyInput = '';
+      anthropicKeyInput = '';
+      geminiKeyInput = '';
+      showApiKeysModal = false;
+      notify('Chaves de API e configurações de IA salvas no .env com sucesso!');
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      salvandoKeys = false;
     }
   }
 
@@ -463,19 +556,31 @@
 
     <div class="sidebar-footer">
       <div class="engine-box">
-        <label for="ai-engine-sel">Motor de IA Ativo</label>
-        <select id="ai-engine-sel" bind:value={selectedProvider}>
+        <div class="engine-head">
+          <label for="ai-engine-sel">Motor de IA Ativo</label>
+          <span class="engine-status-pill" class:ready={activeProviderMeta?.configured}>
+            {activeProviderMeta?.configured ? '🟢 Pronto' : '🔑 Sem Chave'}
+          </span>
+        </div>
+        <select id="ai-engine-sel" value={selectedProvider} onchange={aoSelecionarMotorIA}>
           {#if providers.length === 0}
             <option value="ollama">Ollama Local (qwen2.5)</option>
             <option value="opencode">OpenCode CLI</option>
             <option value="anthropic">Anthropic Claude</option>
             <option value="openai">OpenAI GPT-4o</option>
+            <option value="google">Google Gemini</option>
           {:else}
             {#each providers as p}
-              <option value={p.id}>{p.label}</option>
+              <option value={p.id}>
+                {p.label} {p.requires_api_key ? (p.configured ? '✓' : '🔒') : ''}
+              </option>
             {/each}
           {/if}
         </select>
+
+        <button type="button" class="btn-config-keys" onclick={() => (showApiKeysModal = true)}>
+          🔑 Configurar Chaves API
+        </button>
       </div>
 
       <div class="api-status">
@@ -1182,6 +1287,139 @@
   </div>
 {/if}
 
+<!-- MODAL DE CHAVES DE API EXTERNA & MOTORES DE IA -->
+{#if showApiKeysModal}
+  {@const pOpenai = providers.find((x) => x.id === 'openai')}
+  {@const pAnthropic = providers.find((x) => x.id === 'anthropic')}
+  {@const pGoogle = providers.find((x) => x.id === 'google')}
+  <div class="modal-backdrop">
+    <div class="modal-card modal-wide">
+      <div class="modal-head">
+        <h3>🔑 Configurar Chaves de API Externa & Motores de IA</h3>
+        <button type="button" class="modal-close" onclick={() => (showApiKeysModal = false)}>✕</button>
+      </div>
+      <p class="modal-desc">
+        Insira as chaves de API dos provedores externos (OpenAI, Anthropic Claude, Google Gemini) ou ajuste os modelos locais (Ollama / OpenCode). As credenciais são salvas automaticamente no arquivo <code>.env</code> do servidor.
+      </p>
+
+      <div class="modal-fields">
+        <div class="field">
+          <label for="m-active-prov">Motor Principal Selecionado</label>
+          <select id="m-active-prov" bind:value={selectedProvider}>
+            {#each providers as p}
+              <option value={p.id}>{p.label}</option>
+            {/each}
+          </select>
+        </div>
+
+        <!-- 1. OpenAI -->
+        <div class="provider-config-card" class:selected={selectedProvider === 'openai'}>
+          <div class="prov-card-head">
+            <strong>🤖 OpenAI (GPT-4o / GPT-4.1)</strong>
+            <span class="prov-key-badge" class:ok={pOpenai?.has_key}>
+              {pOpenai?.has_key ? `✅ Salva (${pOpenai.masked_key})` : '⚠️ Sem API Key'}
+            </span>
+          </div>
+          <div class="form-grid-2">
+            <div class="field">
+              <label for="k-openai">OpenAI API Key (OPENAI_API_KEY)</label>
+              <input
+                id="k-openai"
+                type="password"
+                placeholder={pOpenai?.has_key ? `Manter atual (${pOpenai.masked_key}) ou digitar nova...` : 'sk-proj-...'}
+                bind:value={openaiKeyInput}
+              />
+            </div>
+            <div class="field">
+              <label for="m-openai">Modelo OpenAI</label>
+              <input id="m-openai" type="text" placeholder="gpt-4o" bind:value={openaiModelInput} />
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Anthropic Claude -->
+        <div class="provider-config-card" class:selected={selectedProvider === 'anthropic'}>
+          <div class="prov-card-head">
+            <strong>🧠 Anthropic Claude (Sonnet 4 / 3.5)</strong>
+            <span class="prov-key-badge" class:ok={pAnthropic?.has_key}>
+              {pAnthropic?.has_key ? `✅ Salva (${pAnthropic.masked_key})` : '⚠️ Sem API Key'}
+            </span>
+          </div>
+          <div class="form-grid-2">
+            <div class="field">
+              <label for="k-anthropic">Anthropic API Key (ANTHROPIC_API_KEY)</label>
+              <input
+                id="k-anthropic"
+                type="password"
+                placeholder={pAnthropic?.has_key ? `Manter atual (${pAnthropic.masked_key}) ou digitar nova...` : 'sk-ant-api03-...'}
+                bind:value={anthropicKeyInput}
+              />
+            </div>
+            <div class="field">
+              <label for="m-anthropic">Modelo Anthropic</label>
+              <input id="m-anthropic" type="text" placeholder="claude-sonnet-4-6" bind:value={anthropicModelInput} />
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Google Gemini -->
+        <div class="provider-config-card" class:selected={selectedProvider === 'google'}>
+          <div class="prov-card-head">
+            <strong>✨ Google Gemini (2.5 Flash / Pro)</strong>
+            <span class="prov-key-badge" class:ok={pGoogle?.has_key}>
+              {pGoogle?.has_key ? `✅ Salva (${pGoogle.masked_key})` : '⚠️ Sem API Key'}
+            </span>
+          </div>
+          <div class="form-grid-2">
+            <div class="field">
+              <label for="k-gemini">Gemini API Key (GEMINI_API_KEY)</label>
+              <input
+                id="k-gemini"
+                type="password"
+                placeholder={pGoogle?.has_key ? `Manter atual (${pGoogle.masked_key}) ou digitar nova...` : 'AIzaSy...'}
+                bind:value={geminiKeyInput}
+              />
+            </div>
+            <div class="field">
+              <label for="m-gemini">Modelo Gemini</label>
+              <input id="m-gemini" type="text" placeholder="gemini-2.5-flash" bind:value={geminiModelInput} />
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Motores Locais (Ollama & OpenCode) -->
+        <div class="provider-config-card" class:selected={selectedProvider === 'ollama' || selectedProvider === 'opencode'}>
+          <div class="prov-card-head">
+            <strong>🏠 Motores Locais (Ollama & OpenCode — Sem Custo de API)</strong>
+            <span class="prov-key-badge ok">✅ Prontos Localmente</span>
+          </div>
+          <div class="form-grid-3">
+            <div class="field">
+              <label for="m-ollama">Modelo Ollama</label>
+              <input id="m-ollama" type="text" bind:value={ollamaModelInput} />
+            </div>
+            <div class="field">
+              <label for="u-ollama">URL Ollama</label>
+              <input id="u-ollama" type="text" bind:value={ollamaUrlInput} />
+            </div>
+            <div class="field">
+              <label for="m-opencode">Modelo OpenCode</label>
+              <input id="m-opencode" type="text" bind:value={opencodeModelInput} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button type="button" class="btn-top ghost" onclick={() => (showApiKeysModal = false)}>Cancelar</button>
+        <button type="button" class="btn-cta" onclick={salvarChavesApi} disabled={salvandoKeys}>
+          {salvandoKeys ? 'Salvando...' : '💾 Salvar Chaves API & Ativar Motor'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .app-shell {
     display: grid;
@@ -1299,13 +1537,34 @@
     gap: 10px;
   }
 
+  .engine-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
   .engine-box label {
     display: block;
     font-size: 0.7rem;
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    margin-bottom: 4px;
+    margin: 0;
+  }
+
+  .engine-status-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+  }
+
+  .engine-status-pill.ready {
+    background: rgba(16, 185, 129, 0.16);
+    color: #34d399;
   }
 
   .engine-box select {
@@ -1316,6 +1575,25 @@
     border-radius: 7px;
     padding: 6px 8px;
     font-size: 0.78rem;
+  }
+
+  .btn-config-keys {
+    margin-top: 6px;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 7px;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    background: rgba(37, 99, 235, 0.14);
+    color: #93c5fd;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-config-keys:hover {
+    background: rgba(37, 99, 235, 0.25);
+    color: #fff;
   }
 
   .api-status {
@@ -2327,8 +2605,48 @@
     border-radius: 14px;
     width: 100%;
     max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
     padding: 20px 22px;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  }
+
+  .modal-card.modal-wide {
+    max-width: 680px;
+  }
+
+  .provider-config-card {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .provider-config-card.selected {
+    border-color: rgba(59, 130, 246, 0.55);
+    background: rgba(37, 99, 235, 0.08);
+  }
+
+  .prov-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 0.84rem;
+  }
+
+  .prov-key-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+  }
+
+  .prov-key-badge.ok {
+    background: rgba(16, 185, 129, 0.16);
+    color: #34d399;
   }
 
   .modal-head {

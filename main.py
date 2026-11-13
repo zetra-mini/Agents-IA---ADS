@@ -21,7 +21,7 @@ from criativos import (
     resolver_pasta_criativos,
     validar_nome_arquivo_upload,
 )
-from llm_config import get_settings, list_providers
+from llm_config import get_settings, list_providers, update_provider_credentials
 from meta_hub import LOJA_PUBLICOS_ADSIMPLES, get_meta_hub, validar_campanha_preflight
 
 logger = logging.getLogger("meta_ads_api")
@@ -108,10 +108,46 @@ async def healthcheck() -> dict[str, Any]:
     }
 
 
+class ConfigurarProvedoresRequest(BaseModel):
+    """Payload para salvar chaves de API externas e modelos diretamente pela Dashboard."""
+
+    active_provider: str | None = None
+    openai_api_key: str | None = None
+    openai_model: str | None = None
+    anthropic_api_key: str | None = None
+    anthropic_model: str | None = None
+    gemini_api_key: str | None = None
+    gemini_model: str | None = None
+    ollama_model: str | None = None
+    ollama_base_url: str | None = None
+    opencode_model: str | None = None
+    opencode_base_url: str | None = None
+    opencode_api_key: str | None = None
+
+
 @app.get("/providers")
 async def get_providers() -> dict[str, Any]:
     """Expõe provedores locais e externos configuráveis para o seletor do frontend."""
     return list_providers()
+
+
+@app.post("/providers/configure")
+async def configure_providers(body: ConfigurarProvedoresRequest) -> dict[str, Any]:
+    """Salva chaves de API (OpenAI, Anthropic, Gemini) e modelos no `.env` e em memória."""
+    return update_provider_credentials(
+        active_provider=body.active_provider,
+        openai_api_key=body.openai_api_key,
+        openai_model=body.openai_model,
+        anthropic_api_key=body.anthropic_api_key,
+        anthropic_model=body.anthropic_model,
+        gemini_api_key=body.gemini_api_key,
+        gemini_model=body.gemini_model,
+        ollama_model=body.ollama_model,
+        ollama_base_url=body.ollama_base_url,
+        opencode_model=body.opencode_model,
+        opencode_base_url=body.opencode_base_url,
+        opencode_api_key=body.opencode_api_key,
+    )
 
 
 @app.get("/criativos")

@@ -6,7 +6,9 @@ Prioriza execução local/OpenCode (opencode e ollama) e mantém provedores exte
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -181,9 +183,33 @@ def resolve_provider_config(
     )
 
 
+def _mask_key(raw: str | None) -> str | None:
+    """Retorna versão mascarada da chave de API (ex: sk-p...9a1b) para exibição segura na UI."""
+    if not raw or not raw.strip():
+        return None
+    clean = raw.strip()
+    if len(clean) <= 8:
+        return "****" + clean[-2:]
+    return f"{clean[:4]}...{clean[-4:]}"
+
+
 def list_providers(settings: Settings | None = None) -> dict[str, Any]:
     """Lista os provedores na ordem prioritária para consumo pelos dashboards."""
     cfg = settings or get_settings()
+    key_map: dict[ProviderName, str] = {
+        "opencode": cfg.opencode_api_key,
+        "ollama": "",
+        "anthropic": cfg.anthropic_api_key,
+        "openai": cfg.openai_api_key,
+        "google": cfg.gemini_api_key,
+    }
+    url_map: dict[ProviderName, str | None] = {
+        "opencode": cfg.opencode_base_url,
+        "ollama": cfg.ollama_base_url,
+        "anthropic": None,
+        "openai": None,
+        "google": None,
+    }
     items = []
     for name in PROVIDER_ORDER:
         meta = PROVIDER_REGISTRY[name]
@@ -194,6 +220,7 @@ def list_providers(settings: Settings | None = None) -> dict[str, Any]:
         except ValueError:
             configured = False
             model = getattr(cfg, f"{'gemini' if name == 'google' else name}_model")
+        raw_key = key_map[name]
         items.append(
             {
                 "id": meta.id,
@@ -201,10 +228,86 @@ def list_providers(settings: Settings | None = None) -> dict[str, Any]:
                 "locality": meta.locality,
                 "model": model,
                 "configured": configured,
+                "requires_api_key": meta.requires_api_key,
+                "has_key": bool(raw_key and raw_key.strip()),
+                "masked_key": _mask_key(raw_key) if meta.requires_api_key else None,
+                "base_url": url_map[name],
                 "active": name == cfg.llm_provider,
             }
         )
     return {"active_provider": cfg.llm_provider, "providers": items}
+
+
+def update_provider_credentials(
+    *,
+    active_provider: str | None = None,
+    openai_api_key: str | None = None,
+    openai_model: str | None = None,
+    anthropic_api_key: str | None = None,
+    anthropic_model: str | None = None,
+    gemini_api_key: str | None = None,
+    gemini_model: str | None = None,
+    ollama_model: str | None = None,
+    ollama_base_url: str | None = None,
+    opencode_model: str | None = None,
+    opencode_base_url: str | None = None,
+    opencode_api_key: str | None = None,
+    env_path: Path | None = None,
+) -> dict[str, Any]:
+    """Atualiza chaves de API e modelos em tempo de execução (os.environ) e persiste no `.env`."""
+    updates: dict[str, str] = {}
+
+    if active_provider and active_provider.strip().lower() in PROVIDER_REGISTRY:
+        updates["LLM_PROVIDER"] = active_provider.strip().lower()
+
+    field_to_env = {
+        "OPENAI_API_KEY": openai_api_key,
+        "OPENAI_MODEL": openai_model,
+        "ANTHROPIC_API_KEY": anthropic_api_key,
+        "ANTHROPIC_MODEL": anthropic_model,
+        "GEMINI_API_KEY": gemini_api_key,
+        "GEMINI_MODEL": gemini_model,
+        "OLLAMA_MODEL": ollama_model,
+        "OLLAMA_BASE_URL": ollama_base_url,
+        "OPENCODE_MODEL": opencode_model,
+        "OPENCODE_BASE_URL": opencode_base_url,
+        "OPENCODE_API_KEY": opencode_api_key,
+    }
+
+    for env_key, val in field_to_env.items():
+        if val is not None:
+            clean_val = val.strip()
+            updates[env_key] = clean_val
+            os.environ[env_key] = clean_val
+
+    if "LLM_PROVIDER" in updates:
+        os.environ["LLM_PROVIDER"] = updates["LLM_PROVIDER"]
+
+    target_env = env_path or Path(".env")
+    existing_lines: list[str] = []
+    if target_env.exists():
+        existing_lines = target_env.read_text(encoding="utf-8").splitlines()
+
+    updated_keys: set[str] = set()
+    new_lines: list[str] = []
+    for line in existing_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            new_lines.append(line)
+            continue
+        k = stripped.split("=", 1)[0].strip()
+        if k in updates:
+            new_lines.append(f"{k}={updates[k]}")
+            updated_keys.add(k)
+        else:
+            new_lines.append(line)
+
+    for k, v in updates.items():
+        if k not in updated_keys:
+            new_lines.append(f"{k}={v}")
+
+    target_env.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    return list_providers(get_settings())
 
 
 def build_crewai_llm(
