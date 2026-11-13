@@ -192,3 +192,32 @@ def test_fallback_deterministico_when_llm_offline() -> None:
     assert plan.orcamento_diario_brl == 500.0
     assert plan.tipo_orcamento == "CBO"
     assert any("Curitiba" in cid for cid in plan.conjuntos[0].publico.localizacoes)
+
+
+def test_meta_hub_adsimples_copilot_and_preflight() -> None:
+    client = TestClient(main.app)
+
+    res_camps = client.get("/meta/campaigns")
+    assert res_camps.status_code == 200
+    camps = res_camps.json()
+    assert len(camps) >= 5
+
+    first_id = camps[0]["id"]
+    res_status = client.patch(f"/meta/campaigns/{first_id}/status", json={"status": "PAUSED"})
+    assert res_status.status_code == 200
+    assert res_status.json()["status"] == "PAUSED"
+
+    res_budget = client.patch(f"/meta/campaigns/{first_id}/budget", json={"daily_budget": 600.0})
+    assert res_budget.status_code == 200
+    assert res_budget.json()["daily_budget"] == 600.0
+
+    res_copilot = client.get("/meta/copilot")
+    assert res_copilot.status_code == 200
+    cop = res_copilot.json()
+    assert "summary_7d" in cop
+    assert "winners" in cop
+    assert "bleeders" in cop
+
+    res_store = client.get("/meta/audiences-store")
+    assert res_store.status_code == 200
+    assert len(res_store.json()["publicos"]) >= 4

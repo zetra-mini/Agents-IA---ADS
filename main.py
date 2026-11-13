@@ -18,6 +18,7 @@ from criativos import (
     validar_nome_arquivo_upload,
 )
 from llm_config import get_settings, list_providers
+from meta_hub import LOJA_PUBLICOS_ADSIMPLES, get_meta_hub, validar_campanha_preflight
 
 logger = logging.getLogger("meta_ads_api")
 settings = get_settings()
@@ -73,6 +74,16 @@ class CampanhaResposta(BaseModel):
     plano_campanha: CampanhaMetaAdsPlan
     criativos_encontrados: dict[str, Any]
     automacao: dict[str, Any] | None = None
+    validacao_preflight: dict[str, Any] | None = None
+    campanha_registrada: dict[str, Any] | None = None
+
+
+class StatusCampanhaPatch(BaseModel):
+    status: str
+
+
+class OrcamentoCampanhaPatch(BaseModel):
+    daily_budget: float
 
 
 def _carregar_criativos(pasta_criativos: str | None) -> dict[str, Any]:
@@ -181,14 +192,19 @@ async def criar_campanha(payload: ComandoCampanhaRequest) -> CampanhaResposta:
             detail=f"Falha na etapa de planejamento CrewAI: {exc}",
         ) from exc
 
+    caminhos = [item["caminho"] for item in criativos_info["arquivos"]]
+    validacao = validar_campanha_preflight(plano, caminhos)
+    campanha_hub = get_meta_hub().registrar_campanha_do_plano(plano, caminhos)
+
     if not payload.executar_navegador:
         return CampanhaResposta(
             plano_campanha=plano,
             criativos_encontrados=criativos_info,
             automacao=None,
+            validacao_preflight=validacao,
+            campanha_registrada=campanha_hub,
         )
 
-    caminhos = [item["caminho"] for item in criativos_info["arquivos"]]
     try:
         automacao_res = await executar_rascunho_meta_ads(
             plano=plano,
@@ -199,6 +215,8 @@ async def criar_campanha(payload: ComandoCampanhaRequest) -> CampanhaResposta:
             plano_campanha=plano,
             criativos_encontrados=criativos_info,
             automacao=automacao_res,
+            validacao_preflight=validacao,
+            campanha_registrada=campanha_hub,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -220,3 +238,39 @@ async def abrir_navegador_meta_ads(url: str | None = None) -> dict[str, Any]:
         headless=cfg.browser_headless,
         user_data_dir=cfg.browser_user_data_dir,
     )
+
+
+@app.get("/meta/campaigns")
+async def listar_campanhas_hub() -> list[dict[str, Any]]:
+    """Lista campanhas da conta (Mock/Graph API de octaviosilva2/meta-ads) com diagnóstico de performance."""
+    return await get_meta_hub().list_campaigns()
+
+
+@app.get("/meta/copilot")
+async def obter_relatorio_copilot() -> dict[str, Any]:
+    """Retorna o relatório do Robô Otimizador estilo Hackr Ads / AdSimples + TheMattBerman/meta-ads-kit."""
+    return await get_meta_hub().get_copilot_report()
+
+
+@app.get("/meta/audiences-store")
+async def obter_loja_publicos() -> dict[str, Any]:
+    """Retorna a Loja de Públicos Prontos inspirada no Hackr Ads / AdSimples."""
+    return {"publicos": LOJA_PUBLICOS_ADSIMPLES}
+
+
+@app.patch("/meta/campaigns/{campaign_id}/status")
+async def alterar_status_campanha(campaign_id: str, body: StatusCampanhaPatch) -> dict[str, Any]:
+    """Ativa (ACTIVE) ou pausa (PAUSED) uma campanha em 1 clique."""
+    try:
+        return await get_meta_hub().update_campaign_status(campaign_id, body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/meta/campaigns/{campaign_id}/budget")
+async def alterar_orcamento_campanha(campaign_id: str, body: OrcamentoCampanhaPatch) -> dict[str, Any]:
+    """Escala ou reduz o orçamento diário de uma campanha em 1 clique."""
+    try:
+        return await get_meta_hub().update_campaign_budget(campaign_id, body.daily_budget)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

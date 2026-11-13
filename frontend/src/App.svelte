@@ -1,11 +1,13 @@
 <script>
   import { onMount } from 'svelte';
   import SimuladorMetaAds from './SimuladorMetaAds.svelte';
+  import PainelAdSimples from './PainelAdSimples.svelte';
 
   const EXEMPLO_INSTRUCAO =
     'Criar campanha CBO de leads para repasse de financiamento, R$ 500/dia, para Campo Largo e Curitiba';
 
   let simuladorRef = $state(null);
+  let painelAdSimplesRef = $state(null);
   let modoTelaCheiaGerenciador = $state(
     typeof window !== 'undefined' && window.location.search.includes('view=adsmanager')
   );
@@ -144,6 +146,7 @@
       try {
         localStorage.setItem('meta_ads_ultimo_plano', JSON.stringify(data));
       } catch (_) {}
+      painelAdSimplesRef?.recarregarHub();
       if (acionarNavegador) {
         setTimeout(() => {
           simuladorRef?.iniciarDemonstracaoVisual();
@@ -228,6 +231,14 @@
       />
     </section>
   {:else}
+  <PainelAdSimples
+    bind:this={painelAdSimplesRef}
+    onAplicarPublico={(novaInstrucao) => {
+      instrucao = novaInstrucao;
+    }}
+    validacaoPreflight={resultado?.validacao_preflight}
+  />
+
   <section class="grid">
     <!-- Coluna Esquerda: Configurações + Criativos + Comando -->
     <div class="stack">
