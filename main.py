@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from agentes import CampanhaMetaAdsPlan, planejar_campanha
@@ -189,6 +190,24 @@ async def upload_criativos(
     }
 
 
+@app.get("/criativos/arquivo/{nome_arquivo}")
+async def servir_arquivo_criativo(
+    nome_arquivo: str,
+    pasta: str | None = Query(default=None),
+) -> FileResponse:
+    """Serve o arquivo de imagem ou vídeo da pasta de criativos para prévia em tempo real."""
+    try:
+        nome_limpo = validar_nome_arquivo_upload(nome_arquivo)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    cfg = get_settings()
+    destino_dir = resolver_pasta_criativos(pasta, cfg.creatives_dir)
+    caminho = (destino_dir / nome_limpo).resolve()
+    if not caminho.exists() or not caminho.is_file():
+        raise HTTPException(status_code=404, detail=f"Criativo '{nome_limpo}' não encontrado.")
+    return FileResponse(caminho)
+
+
 @app.post("/campanhas/planejar", response_model=CampanhaMetaAdsPlan)
 async def planejar_somente(payload: ComandoCampanhaRequest) -> CampanhaMetaAdsPlan:
     """Executa apenas o CrewAI (Gestor de Tráfego + Copywriter) e devolve o JSON."""
@@ -234,7 +253,16 @@ async def criar_campanha(payload: ComandoCampanhaRequest) -> CampanhaResposta:
 
     caminhos = [item["caminho"] for item in criativos_info["arquivos"]]
     validacao = validar_campanha_preflight(plano, caminhos)
-    campanha_hub = get_meta_hub().registrar_campanha_do_plano(plano, caminhos)
+    hub = get_meta_hub()
+    if hub._access_token:
+        try:
+            res_real = await hub.criar_campanha_real_graph_api(plano, caminhos)
+            campanha_hub = res_real.get("campanha") or hub.registrar_campanha_do_plano(plano, caminhos)
+        except Exception as exc:
+            logger.warning("Fallback no /campanhas/criar ao publicar na Graph API: %s", exc)
+            campanha_hub = hub.registrar_campanha_do_plano(plano, caminhos)
+    else:
+        campanha_hub = hub.registrar_campanha_do_plano(plano, caminhos)
 
     if not payload.executar_navegador:
         return CampanhaResposta(

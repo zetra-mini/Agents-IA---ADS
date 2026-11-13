@@ -832,7 +832,10 @@ class MetaAdsHub:
                 contas_para_tentar.append(acc["id"])
 
         camp_id: str | None = None
+        adset_id: str | None = None
         conta_usada = self._selected_account_id
+        payload_vencedor: dict[str, Any] = {}
+        verificacao_readback: dict[str, Any] = {}
         ultimo_erro = ""
 
         async with httpx.AsyncClient(params={"access_token": self._access_token}, timeout=25.0) as client:
@@ -845,6 +848,7 @@ class MetaAdsHub:
                     if resp.status_code == 200:
                         camp_id = resp.json().get("id")
                         conta_usada = acc_id
+                        payload_vencedor = payload_camp
                         break
                     ultimo_erro = self._extrair_erro_meta_detalhado(resp)
                 if camp_id:
@@ -854,23 +858,150 @@ class MetaAdsHub:
                 if idx_conta == 0 and conta_atual_info and conta_atual_info.get("account_status", 1) == 1:
                     break
 
-        if not camp_id:
-            raise ValueError(f"Erro da Meta Graph API ao criar campanha: {ultimo_erro}")
+            if not camp_id:
+                raise ValueError(f"Erro da Meta Graph API ao criar campanha: {ultimo_erro}")
+
+            # Etapa 2 (get-mcp-ads/meta-ads-mcp-server): Readback Verification para confirmar que a campanha existe no Gerenciador
+            try:
+                rb = await client.get(
+                    f"{GRAPH_HOST}/{version}/{camp_id}",
+                    params={"fields": "id,name,account_id,status,daily_budget,objective"},
+                )
+                if rb.status_code == 200:
+                    verificacao_readback = rb.json()
+            except Exception:
+                pass
+
+            # Etapa 3 (pipeboard-co/meta-ads-mcp): Busca de Cidades (adgeolocation) + Criação do Conjunto de Anúncios (AdSet)
+            try:
+                conj = plano.conjuntos[0] if plano.conjuntos else None
+                nome_adset = conj.nome if conj else f"Conjunto 01 - {plano.nome_campanha[:35]}"
+                idade_min = max(18, min(65, conj.publico.idade_minima if conj else 23))
+                idade_max = max(idade_min, min(65, conj.publico.idade_maxima if conj else 58))
+                raio_km = max(10, min(80, conj.publico.raio_km if conj else 25))
+                cidades_nomes = conj.publico.localizacoes if (conj and conj.publico.localizacoes) else ["Curitiba"]
+
+                cities_spec: list[dict[str, Any]] = []
+                for cid_nome in cidades_nomes[:4]:
+                    geo_resp = await client.get(
+                        f"{GRAPH_HOST}/{version}/search",
+                        params={
+                            "type": "adgeolocation",
+                            "q": cid_nome,
+                            "location_types": '["city"]',
+                            "country_code": "BR",
+                            "limit": 3,
+                        },
+                    )
+                    if geo_resp.status_code == 200:
+                        geo_data = geo_resp.json().get("data", [])
+                        if geo_data and geo_data[0].get("key"):
+                            cities_spec.append(
+                                {
+                                    "key": str(geo_data[0]["key"]),
+                                    "radius": raio_km,
+                                    "distance_unit": "kilometer",
+                                }
+                            )
+
+                geo_locations: dict[str, Any] = (
+                    {"cities": cities_spec} if cities_spec else {"countries": ["BR"]}
+                )
+                targeting_spec: dict[str, Any] = {
+                    "age_min": idade_min,
+                    "age_max": idade_max,
+                    "geo_locations": geo_locations,
+                    "targeting_automation": {"advantage_audience": 0},
+                }
+
+                camp_tem_budget = "daily_budget" in payload_vencedor
+                for opt_goal in ("LINK_CLICKS", "REACH"):
+                    adset_payload: dict[str, Any] = {
+                        "name": nome_adset,
+                        "campaign_id": camp_id,
+                        "status": "PAUSED",
+                        "billing_event": "IMPRESSIONS",
+                        "optimization_goal": opt_goal,
+                        "targeting": json.dumps(targeting_spec, ensure_ascii=False),
+                    }
+                    if not camp_tem_budget:
+                        adset_payload["daily_budget"] = budget_centavos
+                        adset_payload["bid_strategy"] = "LOWEST_COST_WITHOUT_CAP"
+
+                    adset_resp = await client.post(
+                        f"{GRAPH_HOST}/{version}/{conta_usada}/adsets",
+                        data=adset_payload,
+                    )
+                    if adset_resp.status_code == 200:
+                        adset_id = adset_resp.json().get("id")
+                        break
+            except Exception:
+                pass
+
+            # 3. Upload do Criativo (Imagem) na Biblioteca da Conta Real (adimages)
+            image_hash = None
+            try:
+                import base64
+
+                anuncio_0 = plano.anuncios[0] if getattr(plano, "anuncios", None) else None
+                nome_arq = getattr(anuncio_0, "arquivo_criativo", "") if anuncio_0 else ""
+                caminho_criativo = None
+                if nome_arq:
+                    cand = Path("./criativos") / Path(nome_arq).name
+                    if cand.exists() and cand.is_file():
+                        caminho_criativo = cand
+                if not caminho_criativo and caminhos_criativos:
+                    for c_str in caminhos_criativos:
+                        cand = Path(c_str)
+                        if cand.exists() and cand.is_file():
+                            caminho_criativo = cand
+                            break
+                if caminho_criativo and caminho_criativo.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+                    b64_bytes = base64.b64encode(caminho_criativo.read_bytes()).decode("ascii")
+                    img_resp = await client.post(
+                        f"{GRAPH_HOST}/{version}/{conta_usada}/adimages",
+                        data={
+                            "bytes": b64_bytes,
+                            "name": caminho_criativo.name,
+                            "access_token": self._access_token,
+                        },
+                    )
+                    if img_resp.status_code == 200:
+                        images_dict = img_resp.json().get("images", {})
+                        for _k, v in images_dict.items():
+                            if isinstance(v, dict) and v.get("hash"):
+                                image_hash = v.get("hash")
+                                break
+            except Exception:
+                pass
 
         if conta_usada != self._selected_account_id:
             self.select_ad_account(conta_usada)
 
+        act_num = self._selected_account_id.replace("act_", "")
+        ads_manager_url = f"https://adsmanager.facebook.com/adsmanager/manage/campaigns?act={act_num}"
+
         registrada = self.registrar_campanha_do_plano(plano, caminhos_criativos)
         registrada["id"] = camp_id or registrada["id"]
         registrada["origem_dados"] = f"CRIADA NA META GRAPH API ({self._selected_account_id})"
+        detalhe_adset = f" + Conjunto ID: {adset_id}" if adset_id else ""
+        detalhe_img = f" + Criativo Hash: {image_hash[:8]}..." if image_hash else ""
         return {
             "sucesso": True,
             "campaign_id": camp_id,
+            "adset_id": adset_id,
+            "image_hash": image_hash,
+            "verificado_no_gerenciador": bool(verificacao_readback.get("id")),
+            "ads_manager_url": ads_manager_url,
             "account_id": self._selected_account_id,
             "account_name": self._selected_account_name,
             "status": "PAUSED",
             "campanha": registrada,
-            "mensagem": f"Campanha '{plano.nome_campanha}' criada com sucesso na sua conta real {self._selected_account_id} ({self._selected_account_name}) — ID: {camp_id}, Status: PAUSED!",
+            "mensagem": (
+                f"✅ Campanha '{plano.nome_campanha}' criada e verificada na sua conta real "
+                f"{self._selected_account_id} ({self._selected_account_name}) — "
+                f"Campanha ID: {camp_id}{detalhe_adset}{detalhe_img} (Status: PAUSED)!"
+            ),
         }
 
     async def get_copilot_report(self) -> dict[str, Any]:

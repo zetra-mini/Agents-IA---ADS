@@ -77,8 +77,50 @@
   let etapaAssistida = $state(1);
   let publicandoReal = $state(false);
   let abrindoNavegador = $state(false);
+  let subindoCriativo = $state(false);
+  let ultimaCampanhaRealCriada = $state(null);
   let simuladorRef = $state(null);
   let validacaoPreflight = $state(null);
+
+  function ehVideoCriativo(nome) {
+    if (!nome) return false;
+    return /\.(mp4|mov|webm)$/i.test(nome);
+  }
+
+  function temArquivoRealNaPasta(nome) {
+    if (!nome) return false;
+    return criativosLista.some((a) => a.nome === nome);
+  }
+
+  async function uploadArquivoCriativo(event) {
+    const files = event.target?.files;
+    if (!files || files.length === 0) return;
+    subindoCriativo = true;
+    try {
+      const formData = new FormData();
+      for (const f of files) {
+        formData.append('files', f);
+      }
+      const res = await fetch('/api/criativos/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Falha ao enviar arquivo de criativo.');
+      criativosLista = data.inventario?.arquivos || criativosLista;
+      const primeiroSalvo = data.salvos?.[0];
+      if (primeiroSalvo && planoAssistido.anuncios?.[0]) {
+        planoAssistido.anuncios[0].arquivo_criativo = primeiroSalvo;
+        planoAssistido.anuncios[0].formato = ehVideoCriativo(primeiroSalvo) ? 'video' : 'imagem_unica';
+      }
+      notify(`Criativo "${primeiroSalvo}" enviado com sucesso e aplicado no anúncio!`);
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      subindoCriativo = false;
+      if (event.target) event.target.value = '';
+    }
+  }
 
   let planoAssistido = $state({
     nome_campanha: 'Campanha CBO - Leads Repasse Financiamento - Curitiba',
@@ -453,8 +495,24 @@
 
   async function criarCampanhaAssistidaNavegador() {
     abrindoNavegador = true;
-    toolActivities = ['Orquestrando CrewAI + Playwright', 'Movendo mouse no Gerenciador de Anúncios'];
+    toolActivities = ['Criando campanha real na Meta Graph API', 'Iniciando demonstração visual no Gerenciador'];
     try {
+      let msgReal = '';
+      if (connection.has_token) {
+        const resGraph = await fetch('/api/campanhas/assistida/publicar-graph', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plano_campanha: planoAssistido }),
+        });
+        const dataGraph = await resGraph.json();
+        if (!resGraph.ok) {
+          throw new Error(dataGraph.detail || 'Falha ao criar campanha na Meta Graph API.');
+        }
+        ultimaCampanhaRealCriada = dataGraph;
+        msgReal = dataGraph.mensagem;
+        chatHistory = [...chatHistory, { autor: 'ia', texto: `🎉 ${dataGraph.mensagem}` }];
+      }
+
       const res = await fetch('/api/campanhas/criar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -471,7 +529,10 @@
       setTimeout(() => {
         simuladorRef?.iniciarDemonstracaoVisual();
       }, 100);
-      notify('Campanha registrada e automação visual iniciada no Gerenciador de Anúncios!');
+      notify(
+        msgReal ||
+          'Campanha registrada e automação visual iniciada no Gerenciador de Anúncios!'
+      );
       await carregarTudo();
     } catch (err) {
       notify(err.message, 'error');
@@ -496,10 +557,10 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Erro na Meta Graph API.');
+      ultimaCampanhaRealCriada = data;
       notify(data.mensagem);
       chatHistory = [...chatHistory, { autor: 'ia', texto: `🎉 ${data.mensagem}` }];
       await carregarTudo();
-      activeNav = 'dashboard';
     } catch (err) {
       notify(err.message, 'error');
       chatHistory = [...chatHistory, { autor: 'ia', texto: `⚠️ ${err.message}` }];
@@ -913,6 +974,37 @@
                   <label for="f-cat">Categoria de Anúncio Especial</label>
                   <input id="f-cat" type="text" bind:value={planoAssistido.categoria_especial_anuncio} />
                 </div>
+                {#if planoAssistido.anuncios?.[0]}
+                  <div class="field full">
+                    <label for="f-upload-step1">📤 Criativo do Anúncio (Subir Imagem ou Vídeo)</label>
+                    <div class="creative-upload-row">
+                      <label class="btn-upload-creative" for="f-upload-step1">
+                        {subindoCriativo
+                          ? '⏳ Enviando arquivo...'
+                          : '📤 Subir Imagem ou Vídeo (.png, .jpg, .mp4, .mov)'}
+                      </label>
+                      <input
+                        id="f-upload-step1"
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.webm"
+                        multiple
+                        onchange={uploadArquivoCriativo}
+                        hidden
+                      />
+                      <select class="creative-select-inline" bind:value={planoAssistido.anuncios[0].arquivo_criativo}>
+                        {#if criativosLista.length === 0}
+                          <option value="criativo_repasse_curitiba.png">criativo_repasse_curitiba.png</option>
+                        {:else}
+                          {#each criativosLista as arq}
+                            <option value={arq.nome}>
+                              {ehVideoCriativo(arq.nome) ? '🎬' : '🖼️'} {arq.nome}
+                            </option>
+                          {/each}
+                        {/if}
+                      </select>
+                    </div>
+                  </div>
+                {/if}
               </div>
               <div class="wiz-footer">
                 <span class="wiz-hint">Destino: {connection.selected_account_id || 'Gerenciador Conectado'}</span>
@@ -979,21 +1071,53 @@
               </div>
 
             {:else if etapaAssistida === 3}
-              <h2>Etapa 3 de 4 — Copywriter & Mídia do Anúncio</h2>
+              <h2>Etapa 3 de 4 — Copywriter & Mídia do Anúncio (Imagem ou Vídeo)</h2>
               {#if planoAssistido.anuncios?.[0]}
                 <div class="form-grid">
+                  <div class="field full">
+                    <label for="f-upload-step3">📤 Enviar Criativo do Computador (Imagem ou Vídeo)</label>
+                    <div class="creative-upload-dropzone">
+                      <label class="btn-upload-creative primary-upload" for="f-upload-step3">
+                        {subindoCriativo
+                          ? '⏳ Enviando Criativo...'
+                          : '📤 Escolher Arquivo de Vídeo ou Imagem (.mp4, .mov, .png, .jpg, .webp)'}
+                      </label>
+                      <input
+                        id="f-upload-step3"
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.webm"
+                        multiple
+                        onchange={uploadArquivoCriativo}
+                        hidden
+                      />
+                      <span class="upload-sub-hint">
+                        Selecionado: <strong>{planoAssistido.anuncios[0].arquivo_criativo}</strong>
+                        ({ehVideoCriativo(planoAssistido.anuncios[0].arquivo_criativo) ? 'Vídeo' : 'Imagem'})
+                      </span>
+                    </div>
+                  </div>
                   <div class="field">
                     <label for="f-adname">Nome do Anúncio</label>
                     <input id="f-adname" type="text" bind:value={planoAssistido.anuncios[0].nome} />
                   </div>
                   <div class="field">
-                    <label for="f-media">Mídia Selecionada</label>
-                    <select id="f-media" bind:value={planoAssistido.anuncios[0].arquivo_criativo}>
+                    <label for="f-media">Criativo Selecionado na Biblioteca</label>
+                    <select
+                      id="f-media"
+                      bind:value={planoAssistido.anuncios[0].arquivo_criativo}
+                      onchange={(e) => {
+                        planoAssistido.anuncios[0].formato = ehVideoCriativo(e.target.value)
+                          ? 'video'
+                          : 'imagem_unica';
+                      }}
+                    >
                       {#if criativosLista.length === 0}
                         <option value="criativo_repasse_curitiba.png">criativo_repasse_curitiba.png</option>
                       {:else}
                         {#each criativosLista as arq}
-                          <option value={arq.nome}>{arq.nome}</option>
+                          <option value={arq.nome}>
+                            {ehVideoCriativo(arq.nome) ? '🎬 Vídeo:' : '🖼️ Imagem:'} {arq.nome}
+                          </option>
                         {/each}
                       {/if}
                     </select>
@@ -1036,6 +1160,13 @@
                   <strong>{planoAssistido.objetivo} · {planoAssistido.tipo_orcamento} · R$ {Number(planoAssistido.orcamento_diario_brl).toFixed(2)}/dia</strong>
                 </div>
                 <div class="rev-item">
+                  <span>Criativo (Mídia)</span>
+                  <strong>
+                    {ehVideoCriativo(planoAssistido.anuncios?.[0]?.arquivo_criativo) ? '🎬 Vídeo' : '🖼️ Imagem'}:
+                    {planoAssistido.anuncios?.[0]?.arquivo_criativo}
+                  </strong>
+                </div>
+                <div class="rev-item">
                   <span>Segmentação</span>
                   <strong>
                     {planoAssistido.conjuntos?.[0]?.publico?.localizacoes?.join(', ')} (+{planoAssistido.conjuntos?.[0]?.publico?.raio_km}km) ·
@@ -1048,6 +1179,29 @@
                 </div>
               </div>
 
+              {#if ultimaCampanhaRealCriada}
+                <div class="real-created-banner">
+                  <div>
+                    <strong>✅ Criada no Gerenciador Real:</strong>
+                    ID Campanha <code>{ultimaCampanhaRealCriada.campaign_id}</code>
+                    {#if ultimaCampanhaRealCriada.adset_id}
+                      · Conjunto <code>{ultimaCampanhaRealCriada.adset_id}</code>
+                    {/if}
+                    em <strong>{ultimaCampanhaRealCriada.account_name} ({ultimaCampanhaRealCriada.account_id})</strong>
+                  </div>
+                  {#if ultimaCampanhaRealCriada.ads_manager_url}
+                    <a
+                      class="btn-open-real-ads"
+                      href={ultimaCampanhaRealCriada.ads_manager_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      🌐 Abrir Campanha no Meu Gerenciador Real ↗
+                    </a>
+                  {/if}
+                </div>
+              {/if}
+
               <div class="launch-stack">
                 <button
                   type="button"
@@ -1056,8 +1210,8 @@
                   disabled={abrindoNavegador}
                 >
                   {abrindoNavegador
-                    ? '🖱️ Iniciando Agente no Gerenciador...'
-                    : '🖱️ Criar de Forma Assistida no Gerenciador (Ver Mouse Preenchendo)'}
+                    ? '🖱️ Criando na Conta Real + Iniciando Agente...'
+                    : '🖱️ Criar de Forma Assistida no Gerenciador (Cria Real + Ver Mouse)'}
                 </button>
 
                 <button
@@ -1080,7 +1234,20 @@
 
           <!-- Card de Prévia Ao Vivo do Anúncio (Feed Instagram / Facebook) -->
           <section class="panel-card preview-card">
-            <h2>Prévia em Tempo Real (Feed Instagram / Facebook)</h2>
+            <div class="preview-head-row">
+              <h2>Prévia em Tempo Real (Feed Instagram / Facebook)</h2>
+              <label class="btn-quick-upload" for="f-upload-preview">
+                {subindoCriativo ? '⏳ Subindo...' : '📤 Subir Vídeo / Imagem'}
+              </label>
+              <input
+                id="f-upload-preview"
+                type="file"
+                accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,.webm"
+                multiple
+                onchange={uploadArquivoCriativo}
+                hidden
+              />
+            </div>
             <div class="ig-mockup">
               <div class="ig-head">
                 <div class="ig-avatar">∞</div>
@@ -1093,7 +1260,29 @@
                 {planoAssistido.anuncios?.[0]?.texto_principal || ''}
               </div>
               <div class="ig-media">
-                <div class="ig-media-badge">🖼️ {planoAssistido.anuncios?.[0]?.arquivo_criativo || 'criativo.png'}</div>
+                {#if temArquivoRealNaPasta(planoAssistido.anuncios?.[0]?.arquivo_criativo)}
+                  {#if ehVideoCriativo(planoAssistido.anuncios?.[0]?.arquivo_criativo)}
+                    <video
+                      class="ig-media-real"
+                      src={`/api/criativos/arquivo/${encodeURIComponent(planoAssistido.anuncios[0].arquivo_criativo)}`}
+                      controls
+                      muted
+                      autoplay
+                      loop
+                      playsinline
+                    ></video>
+                  {:else}
+                    <img
+                      class="ig-media-real"
+                      src={`/api/criativos/arquivo/${encodeURIComponent(planoAssistido.anuncios[0].arquivo_criativo)}`}
+                      alt={planoAssistido.anuncios[0].arquivo_criativo}
+                    />
+                  {/if}
+                {/if}
+                <div class="ig-media-badge">
+                  {ehVideoCriativo(planoAssistido.anuncios?.[0]?.arquivo_criativo) ? '🎬' : '🖼️'}
+                  {planoAssistido.anuncios?.[0]?.arquivo_criativo || 'criativo.png'}
+                </div>
                 <div class="ig-media-overlay">{planoAssistido.anuncios?.[0]?.titulo || ''}</div>
               </div>
               <div class="ig-cta-bar">
@@ -1447,7 +1636,9 @@
   .app-shell {
     display: grid;
     grid-template-columns: 236px minmax(0, 1fr) 340px;
-    min-height: 100vh;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
     background: var(--bg-app);
   }
 
@@ -1467,7 +1658,10 @@
     padding: 20px 14px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 16px;
+    height: 100vh;
+    overflow-y: auto;
   }
 
   .brand {
@@ -1505,8 +1699,7 @@
     display: flex;
     flex-direction: column;
     gap: 5px;
-    margin-top: 16px;
-    flex: 1;
+    margin-top: 4px;
   }
 
   .nav-item {
@@ -1644,6 +1837,8 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .topbar {
@@ -1790,6 +1985,7 @@
   }
 
   .canvas {
+    flex: 1;
     padding: 24px;
     display: flex;
     flex-direction: column;
@@ -2311,7 +2507,8 @@
   }
 
   .ig-media {
-    height: 170px;
+    position: relative;
+    height: 210px;
     background: linear-gradient(135deg, #172554 0%, #0f172a 100%);
     display: flex;
     flex-direction: column;
@@ -2319,11 +2516,23 @@
     padding: 14px;
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .ig-media-real {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
   }
 
   .ig-media-badge {
+    position: relative;
+    z-index: 1;
     align-self: flex-start;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.72);
     padding: 4px 9px;
     border-radius: 6px;
     font-size: 0.72rem;
@@ -2331,9 +2540,118 @@
   }
 
   .ig-media-overlay {
-    font-size: 1rem;
+    position: relative;
+    z-index: 1;
+    font-size: 0.96rem;
     font-weight: 800;
     color: #fff;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+  }
+
+  .creative-upload-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .creative-upload-dropzone {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px dashed rgba(59, 130, 246, 0.45);
+    background: rgba(37, 99, 235, 0.08);
+  }
+
+  .btn-upload-creative {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(59, 130, 246, 0.5);
+    background: rgba(37, 99, 235, 0.2);
+    color: #bfdbfe;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-upload-creative:hover {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  .creative-select-inline {
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .upload-sub-hint {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .preview-head-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .preview-head-row h2 {
+    margin: 0;
+  }
+
+  .btn-quick-upload {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 7px;
+    border: 1px solid rgba(59, 130, 246, 0.45);
+    background: rgba(37, 99, 235, 0.16);
+    color: #93c5fd;
+    font-size: 0.74rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .btn-quick-upload:hover {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  .real-created-banner {
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+    color: #d1fae5;
+  }
+
+  .btn-open-real-ads {
+    background: #059669;
+    color: #fff;
+    text-decoration: none;
+    padding: 7px 12px;
+    border-radius: 7px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
   }
 
   .ig-cta-bar {
