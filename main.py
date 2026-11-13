@@ -331,6 +331,12 @@ async def listar_anuncios_hub() -> list[dict[str, Any]]:
     return await get_meta_hub().list_ads()
 
 
+@app.get("/meta/pages")
+async def listar_paginas_e_perfis_hub() -> dict[str, Any]:
+    """Lista Páginas do Facebook e Perfis do Instagram vinculados para seleção nos anúncios."""
+    return await get_meta_hub().get_pages_and_instagram_profiles()
+
+
 @app.patch("/meta/adsets/{adset_id}/status")
 async def alterar_status_adset(adset_id: str, body: StatusCampanhaPatch) -> dict[str, Any]:
     """Ativa ou pausa um conjunto de anúncios."""

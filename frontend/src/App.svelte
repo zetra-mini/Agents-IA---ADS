@@ -231,6 +231,47 @@
     }
   }
 
+  // Gaveta Lateral de Navegação (Hambúrguer - Clicar mostra, clicar novamente guarda)
+  let showNavDrawer = $state(false);
+
+  function toggleNavDrawer() {
+    showNavDrawer = !showNavDrawer;
+  }
+
+  function fecharNavDrawer() {
+    showNavDrawer = false;
+  }
+
+  // Páginas do Facebook e Perfis do Instagram da Conta Meta
+  let metaPages = $state([]);
+  let metaInstagramProfiles = $state([]);
+  let carregandoPerfis = $state(false);
+
+  async function carregarPaginasEPerfis() {
+    carregandoPerfis = true;
+    try {
+      const res = await fetch('/api/meta/pages');
+      if (res.ok) {
+        const data = await res.json();
+        metaPages = data.pages || [];
+        metaInstagramProfiles = data.instagram_profiles || [];
+        if (planoAssistido.anuncios?.[0]) {
+          if (!planoAssistido.anuncios[0].page_id && metaPages.length > 0) {
+            planoAssistido.anuncios[0].page_id = metaPages[0].id;
+            planoAssistido.anuncios[0].page_name = metaPages[0].name;
+          }
+          if (!planoAssistido.anuncios[0].instagram_actor_id && metaInstagramProfiles.length > 0) {
+            planoAssistido.anuncios[0].instagram_actor_id = metaInstagramProfiles[0].id;
+            planoAssistido.anuncios[0].instagram_username = metaInstagramProfiles[0].username;
+          }
+        }
+      }
+    } catch (_) {
+    } finally {
+      carregandoPerfis = false;
+    }
+  }
+
   let planoAssistido = $state({
     nome_campanha: 'Campanha CBO - Leads Repasse Financiamento - Curitiba',
     objetivo: 'Leads',
@@ -265,6 +306,10 @@
         titulo: 'Repasse de Financiamento Facilitado',
         descricao: 'Simule agora pelo WhatsApp ou Formulário',
         cta: 'Saiba mais',
+        page_id: '',
+        page_name: '',
+        instagram_actor_id: 'ig_usar_pagina',
+        instagram_username: '(Usar Página do Facebook no Instagram)',
       },
     ],
     observacoes_compliance: ['Categoria Especial Crédito verificada.'],
@@ -366,6 +411,7 @@
         const criData = await resCri.json();
         criativosLista = criData.arquivos || [];
       }
+      await carregarPaginasEPerfis();
     } catch (_) {
       apiOnline = false;
     }
@@ -833,14 +879,42 @@
 </script>
 
 <div class="app-shell">
-  <!-- 1. SIDEBAR DE NAVEGAÇÃO LIMPA (CADA SEÇÃO NO SEU LUGAR, SEM FUNÇÃO DENTRO DE FUNÇÃO) -->
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-logo">∞</div>
-      <div class="brand-titles">
-        <div class="brand-name">AdSimples AI</div>
-        <div class="brand-sub">Meta Ads Copilot</div>
+  <!-- GAVETA LATERAL DE NAVEGAÇÃO (DESLIZA E GUARDA COM O BOTÃO DE HAMBÚRGUER) -->
+  {#if showNavDrawer}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div
+      class="nav-drawer-backdrop"
+      role="presentation"
+      onclick={fecharNavDrawer}
+    ></div>
+  {/if}
+
+  <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
+  <aside
+    class="nav-drawer"
+    class:open={showNavDrawer}
+    role="dialog"
+    tabindex="-1"
+    aria-label="Menu de Navegação Principal"
+    onkeydown={(e) => e.key === 'Escape' && fecharNavDrawer()}
+  >
+    <div class="nav-drawer-head">
+      <div class="brand">
+        <div class="brand-logo">∞</div>
+        <div class="brand-titles">
+          <div class="brand-name">AdSimples AI</div>
+          <div class="brand-sub">Meta Ads Copilot</div>
+        </div>
       </div>
+      <button
+        type="button"
+        class="btn-drawer-close"
+        onclick={fecharNavDrawer}
+        title="Guardar / Fechar Menu"
+        aria-label="Fechar gaveta de menu"
+      >
+        ✕
+      </button>
     </div>
 
     <!-- CONTA META ATIVA NA SIDEBAR -->
@@ -859,7 +933,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'dashboard'}
-        onclick={() => (activeNav = 'dashboard')}
+        onclick={() => { activeNav = 'dashboard'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">📊</span>
         <span>Gerenciador & Campanhas</span>
@@ -870,7 +944,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'relatorios'}
-        onclick={() => (activeNav = 'relatorios')}
+        onclick={() => { activeNav = 'relatorios'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">📈</span>
         <span>Relatórios & Evolução</span>
@@ -880,7 +954,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'assistida'}
-        onclick={() => (activeNav = 'assistida')}
+        onclick={() => { activeNav = 'assistida'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">🪄</span>
         <span>Criação Assistida</span>
@@ -890,7 +964,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'publicos'}
-        onclick={() => (activeNav = 'publicos')}
+        onclick={() => { activeNav = 'publicos'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">👥</span>
         <span>Loja de Públicos</span>
@@ -900,7 +974,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'robo'}
-        onclick={() => (activeNav = 'robo')}
+        onclick={() => { activeNav = 'robo'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">🤖</span>
         <span>Robô Otimizador</span>
@@ -912,7 +986,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'oak_brain'}
-        onclick={() => (activeNav = 'oak_brain')}
+        onclick={() => { activeNav = 'oak_brain'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">🧠</span>
         <span>Cérebro da Marca</span>
@@ -922,7 +996,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'oak_anuncios'}
-        onclick={() => (activeNav = 'oak_anuncios')}
+        onclick={() => { activeNav = 'oak_anuncios'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">✍️</span>
         <span>Copy Meta Ads</span>
@@ -932,7 +1006,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'oak_reels'}
-        onclick={() => (activeNav = 'oak_reels')}
+        onclick={() => { activeNav = 'oak_reels'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">🎬</span>
         <span>Roteiros Reels & Zap</span>
@@ -942,7 +1016,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'oak_score'}
-        onclick={() => (activeNav = 'oak_score')}
+        onclick={() => { activeNav = 'oak_score'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">🎯</span>
         <span>Creative Score (0–10)</span>
@@ -952,7 +1026,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'oak_espiao'}
-        onclick={() => (activeNav = 'oak_espiao')}
+        onclick={() => { activeNav = 'oak_espiao'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">🕵️</span>
         <span>Espiar Concorrentes</span>
@@ -962,7 +1036,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'oak_mcp'}
-        onclick={() => (activeNav = 'oak_mcp')}
+        onclick={() => { activeNav = 'oak_mcp'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">🔌</span>
         <span>Segmentação Meta MCP</span>
@@ -972,7 +1046,7 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'oak_benchmarks'}
-        onclick={() => (activeNav = 'oak_benchmarks')}
+        onclick={() => { activeNav = 'oak_benchmarks'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">📚</span>
         <span>Benchmarks & Copy</span>
@@ -984,6 +1058,7 @@
         class:active={activeNav === 'automacao'}
         onclick={() => {
           activeNav = 'automacao';
+          fecharNavDrawer();
           setTimeout(() => simuladorRef?.iniciarDemonstracaoVisual(), 80);
         }}
       >
@@ -997,7 +1072,7 @@
         type="button"
         class="nav-item"
         class:active={showChatDrawer}
-        onclick={() => (showChatDrawer = !showChatDrawer)}
+        onclick={() => { showChatDrawer = !showChatDrawer; fecharNavDrawer(); }}
         title="Abrir Assistente Copiloto IA (Gaveta Lateral)"
       >
         <span class="nav-icon">💬</span>
@@ -1008,14 +1083,14 @@
         type="button"
         class="nav-item"
         class:active={activeNav === 'configuracoes'}
-        onclick={() => (activeNav = 'configuracoes')}
+        onclick={() => { activeNav = 'configuracoes'; fecharNavDrawer(); }}
       >
         <span class="nav-icon">⚙️</span>
         <span>Configurações & Contas</span>
       </button>
     </nav>
 
-    <!-- RODAPÉ DA SIDEBAR: MOTOR OPENCODE GRÁTIS + BACKEND -->
+    <!-- RODAPÉ DA GAVETA: MOTOR OPENCODE GRÁTIS + BACKEND -->
     <div class="sidebar-footer-minimal">
       <div class="status-dot-row">
         <span class="engine-dot-status ready"></span>
@@ -1028,8 +1103,99 @@
     </div>
   </aside>
 
-  <!-- 2. ÁREA CENTRAL DE TRABALHO: 100% LIMPA, ZERO POLUIÇÃO NO TOPO -->
+  <!-- 2. ÁREA CENTRAL DE TRABALHO: 100% LIMPA COM TOPBAR INTEGRADA (MOSTRAR / GUARDAR COM O HAMBÚRGUER) -->
   <div class="workspace">
+    <!-- BARRA SUPERIOR ELEGANTE COM BOTÃO DE HAMBÚRGUER -->
+    <header class="app-topbar">
+      <div class="topbar-left">
+        <button
+          type="button"
+          class="btn-hamburger"
+          class:open={showNavDrawer}
+          onclick={toggleNavDrawer}
+          title={showNavDrawer ? 'Guardar / Fechar Menu Lateral' : 'Abrir Menu de Funções (Gaveta)'}
+          aria-label="Abrir ou fechar menu lateral de funções"
+        >
+          <span class="hamburger-bar-icon">{showNavDrawer ? '✕' : '☰'}</span>
+          <span class="hamburger-text">Menu</span>
+        </button>
+
+        <div class="topbar-breadcrumb">
+          <div class="topbar-brand-chip">
+            <span class="brand-mini-logo">∞</span>
+            <strong>AdSimples AI</strong>
+          </div>
+          <span class="breadcrumb-separator">/</span>
+          <span class="current-section-name">
+            {#if activeNav === 'dashboard'}
+              📊 Gerenciador & Campanhas
+            {:else if activeNav === 'relatorios'}
+              📈 Relatórios & Evolução
+            {:else if activeNav === 'assistida'}
+              🪄 Criação Assistida
+            {:else if activeNav === 'publicos'}
+              👥 Loja de Públicos
+            {:else if activeNav === 'robo'}
+              🤖 Robô Otimizador
+            {:else if activeNav === 'oak_brain'}
+              🧠 Cérebro da Marca
+            {:else if activeNav === 'oak_anuncios'}
+              ✍️ Copy Meta Ads
+            {:else if activeNav === 'oak_reels'}
+              🎬 Roteiros Reels & Zap
+            {:else if activeNav === 'oak_score'}
+              🎯 Creative Score (0–10)
+            {:else if activeNav === 'oak_espiao'}
+              🕵️ Espiar Concorrentes
+            {:else if activeNav === 'oak_mcp'}
+              🔌 Segmentação Meta MCP
+            {:else if activeNav === 'oak_benchmarks'}
+              📚 Benchmarks & Copy
+            {:else if activeNav === 'automacao'}
+              🖱️ Simulador Visual IA
+            {:else}
+              ⚙️ Configurações & Contas
+            {/if}
+          </span>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <!-- Conta Ativa Pill -->
+        <button
+          type="button"
+          class="topbar-acc-pill"
+          onclick={() => (activeNav = 'configuracoes')}
+          title="Ver detalhes da Conta Meta ou trocar de conta"
+        >
+          <span class="conn-dot" class:connected={connection.connected}></span>
+          <span class="topbar-acc-title">{connection.selected_account_name || 'Conta dos anúncios'}</span>
+          <code>{connection.selected_account_id || 'act_3339104319737592'}</code>
+        </button>
+
+        <!-- Botão Assistente IA -->
+        <button
+          type="button"
+          class="btn-topbar-action"
+          class:active={showChatDrawer}
+          onclick={() => (showChatDrawer = !showChatDrawer)}
+          title="Abrir Assistente de Campanhas IA (Gaveta Direita)"
+        >
+          💬 Copiloto IA
+        </button>
+
+        <!-- Botão Configurações -->
+        <button
+          type="button"
+          class="btn-topbar-action"
+          class:active={activeNav === 'configuracoes'}
+          onclick={() => (activeNav = 'configuracoes')}
+          title="Configurações & Contas"
+        >
+          ⚙️ Configurações
+        </button>
+      </div>
+    </header>
     {#if toastMessage}
       <div class="toast-bar" class:error={toastType === 'error'}>
         <span>{toastType === 'error' ? '⚠️' : '✅'} {toastMessage}</span>
@@ -1554,6 +1720,12 @@
                               {ad.is_real ? 'CONTA REAL' : 'SISTEMA'}
                             </span>
                             · 📁 {ad.adset_name || 'Conjunto'}
+                            {#if ad.page_name}
+                              · 📘 {ad.page_name}
+                            {/if}
+                            {#if ad.instagram_username && ad.instagram_username !== '(Usar Página do Facebook no Instagram)'}
+                              · 📸 @{ad.instagram_username.replace('@', '')}
+                            {/if}
                             {#if ad.id}
                               <code class="camp-id-code">ID: {ad.id}</code>
                             {/if}
@@ -1925,6 +2097,89 @@
               <h2>Etapa 3 de 4 — Copywriter & Mídia do Anúncio (Imagem ou Vídeo)</h2>
               {#if planoAssistido.anuncios?.[0]}
                 <div class="form-grid">
+                  <!-- IDENTIDADE DE PUBLICAÇÃO: PÁGINAS DO FACEBOOK E PERFIS DO INSTAGRAM -->
+                  <div class="field full ad-identity-box">
+                    <div class="identity-box-head">
+                      <div class="identity-box-title">
+                        <span class="identity-icon">👤</span>
+                        <div>
+                          <strong>Identidade de Publicação (Página do Facebook & Perfil do Instagram)</strong>
+                          <p class="identity-sub">Puxado automaticamente da sua Conta Meta via Graph API para vincular ao criativo.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        class="btn-sync-profiles"
+                        onclick={carregarPaginasEPerfis}
+                        disabled={carregandoPerfis}
+                        title="Atualizar Páginas e Perfis da Meta"
+                      >
+                        {carregandoPerfis ? '⏳ Sincronizando...' : '🔄 Atualizar Perfis da Meta'}
+                      </button>
+                    </div>
+
+                    <div class="identity-fields-grid">
+                      <div class="field">
+                        <label for="f-page-select">
+                          <span class="fb-badge-label">📘 Página do Facebook</span>
+                        </label>
+                        <select
+                          id="f-page-select"
+                          bind:value={planoAssistido.anuncios[0].page_id}
+                          onchange={(e) => {
+                            const sel = metaPages.find((p) => p.id === e.target.value);
+                            if (sel) {
+                              planoAssistido.anuncios[0].page_name = sel.name;
+                              if (sel.instagram_id) {
+                                planoAssistido.anuncios[0].instagram_actor_id = sel.instagram_id;
+                                planoAssistido.anuncios[0].instagram_username = sel.instagram_username;
+                              }
+                            }
+                          }}
+                        >
+                          {#if metaPages.length === 0}
+                            <option value="111238241677173">Tvshopdigital (Página Oficial - 111238241677173)</option>
+                          {:else}
+                            {#each metaPages as pag}
+                              <option value={pag.id}>
+                                {pag.name} (ID: {pag.id}) · {pag.category || 'Página'}
+                              </option>
+                            {/each}
+                          {/if}
+                        </select>
+                        <span class="field-hint">Esta Página assinará o anúncio e responderá às mensagens.</span>
+                      </div>
+
+                      <div class="field">
+                        <label for="f-ig-select">
+                          <span class="ig-badge-label">📸 Perfil do Instagram</span>
+                        </label>
+                        <select
+                          id="f-ig-select"
+                          bind:value={planoAssistido.anuncios[0].instagram_actor_id}
+                          onchange={(e) => {
+                            const sel = metaInstagramProfiles.find((ig) => ig.id === e.target.value);
+                            if (sel) {
+                              planoAssistido.anuncios[0].instagram_username = sel.username;
+                            }
+                          }}
+                        >
+                          {#if metaInstagramProfiles.length === 0}
+                            <option value="ig_usar_pagina">(Usar Página do Facebook no Instagram)</option>
+                          {:else}
+                            {#each metaInstagramProfiles as ig}
+                              <option value={ig.id}>
+                                {ig.id === 'ig_usar_pagina' ? ig.username : (ig.username?.startsWith('@') ? ig.username : `@${ig.username}`)}
+                                {ig.name ? ` — ${ig.name}` : ''}
+                              </option>
+                            {/each}
+                          {/if}
+                        </select>
+                        <span class="field-hint">Conta exibida no Feed do Instagram, Stories e Reels.</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="field full">
                     <label for="f-upload-step3">📤 Enviar Criativo do Computador (Imagem ou Vídeo)</label>
                     <div class="creative-upload-dropzone">
@@ -2826,25 +3081,351 @@
 
 <style>
   .app-shell {
-    display: grid;
-    grid-template-columns: 232px minmax(0, 1fr);
+    display: flex;
+    width: 100vw;
     height: 100vh;
     max-height: 100vh;
     overflow: hidden;
     background: var(--bg-app);
+    position: relative;
   }
 
-  /* SIDEBAR */
-  .sidebar {
+  /* GAVETA LATERAL DE NAVEGAÇÃO (DESLIZA E GUARDA COM O HAMBÚRGUER) */
+  .nav-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.68);
+    backdrop-filter: blur(4px);
+    z-index: 998;
+    animation: fadeInBackdrop 0.2s ease-out;
+  }
+
+  @keyframes fadeInBackdrop {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .nav-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 290px;
+    max-width: 88vw;
+    height: 100vh;
     background: var(--bg-sidebar);
-    border-right: 1px solid var(--border);
-    padding: 14px 12px 12px;
+    border-right: 1px solid var(--border-strong);
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
+    padding: 14px 12px 14px;
     gap: 8px;
-    height: 100vh;
+    z-index: 999;
+    box-shadow: 16px 0 48px rgba(0, 0, 0, 0.75);
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
     overflow-y: auto;
+  }
+
+  .nav-drawer.open {
+    transform: translateX(0);
+  }
+
+  .nav-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .btn-drawer-close {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-drawer-close:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  /* TOPBAR MODERNA INTEGRADA */
+  .app-topbar {
+    height: 52px;
+    min-height: 52px;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    gap: 16px;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .btn-hamburger {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    border-radius: 8px;
+    padding: 6px 13px;
+    color: #38bdf8;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .btn-hamburger:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: #38bdf8;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25);
+  }
+
+  .btn-hamburger.open {
+    background: #38bdf8;
+    color: #0b1120;
+    border-color: #38bdf8;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  }
+
+  .hamburger-bar-icon {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  .topbar-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+  }
+
+  .topbar-brand-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .brand-mini-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #0284c7, #38bdf8);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #fff;
+  }
+
+  .breadcrumb-separator {
+    color: var(--text-secondary);
+    opacity: 0.5;
+  }
+
+  .current-section-name {
+    color: #94a3b8;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .topbar-acc-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    color: #e2e8f0;
+    font-size: 0.74rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .topbar-acc-pill:hover {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: rgba(56, 189, 248, 0.06);
+  }
+
+  .topbar-acc-title {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-acc-pill code {
+    color: #38bdf8;
+    font-size: 0.68rem;
+  }
+
+  .btn-topbar-action {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-topbar-action:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--border-strong);
+    color: #fff;
+  }
+
+  .btn-topbar-action.active {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: #38bdf8;
+    color: #38bdf8;
+  }
+
+  /* IDENTIDADE DE PUBLICAÇÃO DO ANÚNCIO (FACEBOOK PAGE & INSTAGRAM PROFILE) */
+  .ad-identity-box {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+
+  .identity-box-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .identity-box-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .identity-icon {
+    font-size: 1.3rem;
+  }
+
+  .identity-box-title strong {
+    font-size: 0.9rem;
+    color: #fff;
+  }
+
+  .identity-sub {
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+    margin: 2px 0 0;
+  }
+
+  .btn-sync-profiles {
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    color: #38bdf8;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-sync-profiles:hover {
+    background: rgba(56, 189, 248, 0.18);
+    color: #fff;
+  }
+
+  .identity-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  @media (max-width: 768px) {
+    .identity-fields-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .fb-badge-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #60a5fa;
+    font-weight: 600;
+  }
+
+  .ig-badge-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #f472b6;
+    font-weight: 600;
+  }
+
+  .field-hint {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  .ig-handle {
+    color: #f472b6;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-left: 4px;
+  }
+
+  .ig-handle-sub {
+    font-size: 0.72rem;
+    color: #f472b6;
+    font-weight: 500;
   }
 
   .brand {

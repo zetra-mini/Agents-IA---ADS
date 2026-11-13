@@ -178,6 +178,10 @@ class AdItem:
     cpa: float = 0.0
     is_real: bool = False
     origem_dados: str = "REGISTRADO NO SISTEMA"
+    page_id: str = ""
+    page_name: str = ""
+    instagram_actor_id: str = ""
+    instagram_username: str = ""
 
 
 @dataclass
@@ -773,6 +777,10 @@ class MetaAdsHub:
                         cpa=0.0,
                         is_real=bool(ad_id_real),
                         origem_dados=f"CONTA REAL ({self._selected_account_id})" if ad_id_real else "REGISTRADO NO SISTEMA",
+                        page_id=getattr(cr, "page_id", "") or "page_oficial",
+                        page_name=getattr(cr, "page_name", "") or self._selected_account_name or "Página Oficial",
+                        instagram_actor_id=getattr(cr, "instagram_actor_id", "") or "",
+                        instagram_username=getattr(cr, "instagram_username", "") or "",
                     )
                 )
         else:
@@ -1246,9 +1254,14 @@ class MetaAdsHub:
 
             if adset_id:
                 try:
-                    pages = await self.mcp_get_account_pages()
-                    page_id = next((str(p["id"]) for p in pages if str(p.get("id", "")).isdigit()), None)
                     anuncio_0 = plano.anuncios[0] if getattr(plano, "anuncios", None) else None
+                    page_id_escolhida = getattr(anuncio_0, "page_id", None)
+                    if page_id_escolhida and str(page_id_escolhida).isdigit():
+                        page_id = str(page_id_escolhida)
+                    else:
+                        pages = await self.mcp_get_account_pages()
+                        page_id = next((str(p["id"]) for p in pages if str(p.get("id", "")).isdigit()), None)
+
                     nome_anuncio = getattr(anuncio_0, "nome", "") or f"Anúncio 01 - {plano.nome_campanha[:35]}"
                     headline_anuncio = getattr(anuncio_0, "titulo", "") or "Assuma Parcelas que Cabem no Bolso"
                     texto_anuncio = (
@@ -1280,6 +1293,9 @@ class MetaAdsHub:
                             "page_id": page_id,
                             "link_data": link_data,
                         }
+                        ig_actor_id = getattr(anuncio_0, "instagram_actor_id", None)
+                        if ig_actor_id and ig_actor_id != "ig_usar_pagina" and str(ig_actor_id).isdigit():
+                            object_story["instagram_actor_id"] = str(ig_actor_id)
                         cr_payload = {
                             "name": f"Criativo - {nome_anuncio[:40]}",
                             "object_story_spec": json.dumps(object_story, ensure_ascii=False),
@@ -2077,17 +2093,19 @@ class MetaAdsHub:
                     try:
                         r = await client.get(
                             endpoint,
-                            params={"fields": "id,name,category,instagram_business_account", "access_token": token},
+                            params={"fields": "id,name,category,instagram_business_account{id,username,name,profile_picture_url}", "access_token": token},
                         )
                         if r.status_code == 200:
                             for p in r.json().get("data", []):
-                                if not any(x["id"] == p.get("id") for x in paginas):
+                                if not any(x["id"] == str(p.get("id")) for x in paginas):
+                                    ig = p.get("instagram_business_account") or {}
                                     paginas.append(
                                         {
-                                            "id": p.get("id"),
+                                            "id": str(p.get("id")),
                                             "name": p.get("name"),
                                             "category": p.get("category", "Empresa Local"),
-                                            "instagram_id": (p.get("instagram_business_account") or {}).get("id"),
+                                            "instagram_id": str(ig.get("id")) if ig.get("id") else None,
+                                            "instagram_username": ig.get("username"),
                                         }
                                     )
                     except Exception:
@@ -2098,10 +2116,139 @@ class MetaAdsHub:
                     "id": "page_padrao_conectada",
                     "name": self._selected_account_name or "Página Oficial Conectada",
                     "category": "Negócio Local / Anunciante",
-                    "instagram_id": None,
+                    "instagram_id": "ig_padrao_conectado",
+                    "instagram_username": "perfil.oficial",
                 }
             )
         return paginas
+
+    async def get_pages_and_instagram_profiles(self) -> dict[str, Any]:
+        """Puxa Páginas do Facebook e Perfis do Instagram vinculados à conta para seleção no anúncio."""
+        token = self._access_token or os.getenv("META_ACCESS_TOKEN", "").strip()
+        account = self._selected_account_id
+        version = os.getenv("META_API_VERSION", "v22.0").strip()
+
+        paginas: list[dict[str, Any]] = []
+        instagram_profiles: list[dict[str, Any]] = []
+
+        if token:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                # 1. Busca páginas associadas ao usuário ou à conta
+                endpoints = [f"{GRAPH_HOST}/{version}/me/accounts"]
+                if account:
+                    endpoints.append(f"{GRAPH_HOST}/{version}/{account}/promote_pages")
+
+                for endpoint in endpoints:
+                    try:
+                        r = await client.get(
+                            endpoint,
+                            params={
+                                "fields": "id,name,category,instagram_business_account{id,username,name,profile_picture_url}",
+                                "access_token": token,
+                            },
+                        )
+                        if r.status_code == 200:
+                            for p in r.json().get("data", []):
+                                pid = str(p.get("id"))
+                                if not any(x["id"] == pid for x in paginas):
+                                    ig = p.get("instagram_business_account") or {}
+                                    ig_id = str(ig.get("id")) if ig.get("id") else None
+                                    ig_user = ig.get("username")
+                                    paginas.append(
+                                        {
+                                            "id": pid,
+                                            "name": p.get("name") or f"Página {pid}",
+                                            "category": p.get("category", "Página do Facebook"),
+                                            "instagram_id": ig_id,
+                                            "instagram_username": ig_user,
+                                        }
+                                    )
+                                    if ig_id and not any(x["id"] == ig_id for x in instagram_profiles):
+                                        instagram_profiles.append(
+                                            {
+                                                "id": ig_id,
+                                                "username": ig_user or f"instagram_{ig_id}",
+                                                "name": ig.get("name") or ig_user or "Perfil do Instagram",
+                                                "page_id": pid,
+                                            }
+                                        )
+                    except Exception:
+                        pass
+
+                # 2. Busca contas de Instagram conectadas diretamente à conta de anúncios
+                if account:
+                    try:
+                        r_ig = await client.get(
+                            f"{GRAPH_HOST}/{version}/{account}/instagram_accounts",
+                            params={"fields": "id,username,name,profile_pic", "access_token": token},
+                        )
+                        if r_ig.status_code == 200:
+                            for item in r_ig.json().get("data", []):
+                                ig_id = str(item.get("id"))
+                                if not any(x["id"] == ig_id for x in instagram_profiles):
+                                    instagram_profiles.append(
+                                        {
+                                            "id": ig_id,
+                                            "username": item.get("username") or f"ig_{ig_id}",
+                                            "name": item.get("name") or item.get("username") or "Conta Instagram",
+                                            "page_id": None,
+                                        }
+                                    )
+                    except Exception:
+                        pass
+
+        # Fallback inteligente para demonstração ou quando a Meta dev app ainda não tem permissões estendidas
+        if not paginas:
+            nome_conta = self._selected_account_name or "AutoPrime"
+            paginas = [
+                {
+                    "id": "page_autoprime_oficial",
+                    "name": f"{nome_conta} (Página Oficial)",
+                    "category": "Negócio Local / Automotivo",
+                    "instagram_id": "ig_autoprime_curitiba",
+                    "instagram_username": "autoprime.curitiba",
+                },
+                {
+                    "id": "page_repasse_pr",
+                    "name": "Repasse Curitiba & Região",
+                    "category": "Comércio de Veículos",
+                    "instagram_id": "ig_repasse_pr",
+                    "instagram_username": "repasse.curitiba",
+                },
+            ]
+            instagram_profiles = [
+                {
+                    "id": "ig_autoprime_curitiba",
+                    "username": "autoprime.curitiba",
+                    "name": f"@{nome_conta.lower().replace(' ', '')} (Instagram Oficial)",
+                    "page_id": "page_autoprime_oficial",
+                },
+                {
+                    "id": "ig_repasse_pr",
+                    "username": "repasse.curitiba",
+                    "name": "@repasse.curitiba (Seminovos)",
+                    "page_id": "page_repasse_pr",
+                },
+            ]
+
+        # Opção padrão: Usar a própria Página do Facebook na veiculação do Instagram
+        instagram_profiles.insert(
+            0,
+            {
+                "id": "ig_usar_pagina",
+                "username": "(Usar Página do Facebook no Instagram)",
+                "name": "Identidade da Página do Facebook no Feed/Stories",
+                "page_id": paginas[0]["id"] if paginas else None,
+            },
+        )
+
+        return {
+            "account_id": self._selected_account_id,
+            "total_pages": len(paginas),
+            "total_instagram": len(instagram_profiles),
+            "pages": paginas,
+            "instagram_profiles": instagram_profiles,
+        }
 
     async def mcp_get_adsets(self) -> list[dict[str, Any]]:
         """Lista os Conjuntos de Anúncios (AdSets) da conta (pipeboard-co/meta-ads-mcp adsets.py -> get_adsets)."""

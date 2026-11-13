@@ -76,6 +76,22 @@ class CriativoAnuncio(BaseModel):
     cta: Literal["Saiba mais", "Cadastre-se", "Enviar mensagem", "Solicitar agora"] = (
         "Saiba mais"
     )
+    page_id: str | None = Field(
+        default=None,
+        description="ID da Página do Facebook vinculada para veiculação do anúncio.",
+    )
+    page_name: str | None = Field(
+        default=None,
+        description="Nome da Página do Facebook vinculada.",
+    )
+    instagram_actor_id: str | None = Field(
+        default=None,
+        description="ID do Perfil / Conta do Instagram para veiculação no feed/reels/stories.",
+    )
+    instagram_username: str | None = Field(
+        default=None,
+        description="Handle / username do Instagram vinculado.",
+    )
 
 
 class CampanhaMetaAdsPlan(BaseModel):
