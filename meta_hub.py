@@ -14,14 +14,18 @@ Integra:
 
 from __future__ import annotations
 
+import json
 import os
 import random
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from itertools import count
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+SESSION_FILE = Path(".meta_session.json")
 
 from agentes import CampanhaMetaAdsPlan
 
@@ -249,6 +253,49 @@ class MetaAdsHub:
         self._connection_source: str = "graph" if (self._access_token and self._selected_account_id) else "disconnected"
         self._somente_dados_reais: bool = False
         self._seed_initial_data()
+        self._load_session()
+
+    def _save_session(self) -> None:
+        """Persiste localmente a sessão da conta Meta (ignorado no Git) para sobreviver a reinicializações."""
+        try:
+            payload = {
+                "access_token": self._access_token,
+                "selected_account_id": self._selected_account_id,
+                "selected_account_name": self._selected_account_name,
+                "business_name": self._business_name,
+                "user_name": self._user_name,
+                "available_accounts": self._available_accounts,
+                "connection_source": self._connection_source,
+                "somente_dados_reais": self._somente_dados_reais,
+            }
+            SESSION_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    def _load_session(self) -> None:
+        """Restaura sessão da conta Meta salva localmente se existir."""
+        try:
+            if not SESSION_FILE.exists():
+                return
+            data = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+            if data.get("access_token"):
+                self._access_token = data["access_token"]
+            if data.get("selected_account_id"):
+                self._selected_account_id = data["selected_account_id"]
+            if data.get("selected_account_name"):
+                self._selected_account_name = data["selected_account_name"]
+            if data.get("business_name"):
+                self._business_name = data["business_name"]
+            if data.get("user_name"):
+                self._user_name = data["user_name"]
+            if data.get("available_accounts"):
+                self._available_accounts = data["available_accounts"]
+            if data.get("connection_source"):
+                self._connection_source = data["connection_source"]
+            if "somente_dados_reais" in data:
+                self._somente_dados_reais = bool(data["somente_dados_reais"])
+        except Exception:
+            pass
 
     @property
     def mode(self) -> str:
@@ -330,7 +377,8 @@ class MetaAdsHub:
         if alvo_id:
             escolhida = next((a for a in acc_list if a["id"] == alvo_id), None)
         if not escolhida and acc_list:
-            escolhida = acc_list[0]
+            # Prioriza contas ativas (account_status == 1) para evitar erro de conta pendente/bloqueada
+            escolhida = next((a for a in acc_list if a.get("account_status") == 1), acc_list[0])
 
         if escolhida:
             self._selected_account_id = escolhida["id"]
@@ -341,6 +389,7 @@ class MetaAdsHub:
             self._selected_account_name = f"Conta {alvo_id}"
             self._business_name = "Meta Business Manager"
 
+        self._save_session()
         return self.get_connection_status()
 
     def select_ad_account(
@@ -368,6 +417,7 @@ class MetaAdsHub:
         if self._connection_source == "disconnected":
             self._connection_source = "browser"
         self._somente_dados_reais = True
+        self._save_session()
         return self.get_connection_status()
 
     def sync_from_browser_session(self, info_nav: dict[str, Any]) -> dict[str, Any]:
@@ -668,12 +718,35 @@ class MetaAdsHub:
         camp.daily_budget = round(daily_budget, 2)
         return self._serialize_campaign(camp, is_real=(campaign_id in self._real_campaigns))
 
+    @staticmethod
+    def _extrair_erro_meta_detalhado(resp: httpx.Response) -> str:
+        """Extrai a explicação real da Meta Graph API (error_user_title, error_user_msg e blame_field_specs)."""
+        try:
+            err = resp.json().get("error", {})
+        except Exception:
+            return resp.text
+        msg = err.get("message") or "Erro desconhecido"
+        user_title = err.get("error_user_title")
+        user_msg = err.get("error_user_msg")
+        subcode = err.get("error_subcode")
+        err_data = err.get("error_data")
+        partes = [msg]
+        if user_title:
+            partes.append(f"[{user_title}]")
+        if user_msg:
+            partes.append(user_msg)
+        if err_data:
+            partes.append(f"Detalhes: {json.dumps(err_data, ensure_ascii=False)}")
+        if subcode:
+            partes.append(f"(subcode {subcode})")
+        return " — ".join(partes)
+
     async def criar_campanha_real_graph_api(
         self,
         plano: CampanhaMetaAdsPlan,
         caminhos_criativos: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Cria a campanha diretamente na conta real da Meta via Graph API (status=PAUSED)."""
+        """Cria a campanha diretamente na conta real da Meta via Graph API (status=PAUSED) com fallbacks compatíveis v22.0."""
         if not self._access_token or not self._selected_account_id:
             raise ValueError(
                 "Para publicar direto via Meta Graph API, conecte seu Meta Access Token e selecione uma Conta de Anúncios (act_...) no topo da tela."
@@ -682,26 +755,110 @@ class MetaAdsHub:
         version = os.getenv("META_API_VERSION", "v22.0").strip()
         obj_meta = OBJECTIVE_MAP_PT_TO_META.get(plano.objetivo.lower(), "OUTCOME_LEADS")
         cat_raw = (plano.categoria_especial_anuncio or "").lower()
-        special_cats = '["CREDIT"]' if ("crédito" in cat_raw or "credito" in cat_raw) else "[]"
+        usa_credito = "crédito" in cat_raw or "credito" in cat_raw
+        budget_centavos = str(max(600, int(round(plano.orcamento_diario_brl * 100))))
+        is_cbo = plano.tipo_orcamento.upper() == "CBO"
+
+        def _gerar_tentativas_payload() -> list[dict[str, Any]]:
+            tentativas: list[dict[str, Any]] = []
+            # 1. CBO ou ABO com os parâmetros obrigatórios da v21/v22 (bid_strategy ou is_adset_budget_sharing_enabled)
+            if is_cbo:
+                if usa_credito:
+                    tentativas.append(
+                        {
+                            "name": plano.nome_campanha,
+                            "objective": obj_meta,
+                            "status": "PAUSED",
+                            "special_ad_categories": '["CREDIT"]',
+                            "special_ad_category_country": '["BR"]',
+                            "daily_budget": budget_centavos,
+                            "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+                        }
+                    )
+                tentativas.append(
+                    {
+                        "name": plano.nome_campanha,
+                        "objective": obj_meta,
+                        "status": "PAUSED",
+                        "special_ad_categories": "[]",
+                        "daily_budget": budget_centavos,
+                        "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+                    }
+                )
+            # 2. ABO com is_adset_budget_sharing_enabled="false" (exigido pela Graph API v21+ quando sem orçamento na campanha)
+            if usa_credito:
+                tentativas.append(
+                    {
+                        "name": plano.nome_campanha,
+                        "objective": obj_meta,
+                        "status": "PAUSED",
+                        "special_ad_categories": '["CREDIT"]',
+                        "special_ad_category_country": '["BR"]',
+                        "is_adset_budget_sharing_enabled": "false",
+                    }
+                )
+            tentativas.append(
+                {
+                    "name": plano.nome_campanha,
+                    "objective": obj_meta,
+                    "status": "PAUSED",
+                    "special_ad_categories": "[]",
+                    "is_adset_budget_sharing_enabled": "false",
+                }
+            )
+            # 3. Fallback universal compatível (OUTCOME_TRAFFIC / sem sharing flag)
+            tentativas.append(
+                {
+                    "name": plano.nome_campanha,
+                    "objective": "OUTCOME_TRAFFIC",
+                    "status": "PAUSED",
+                    "special_ad_categories": "[]",
+                    "is_adset_budget_sharing_enabled": "false",
+                }
+            )
+            tentativas.append(
+                {
+                    "name": plano.nome_campanha,
+                    "objective": obj_meta,
+                    "status": "PAUSED",
+                    "special_ad_categories": "[]",
+                }
+            )
+            return tentativas
+
+        contas_para_tentar = [self._selected_account_id]
+        for acc in self._available_accounts:
+            if acc.get("account_status") == 1 and acc["id"] not in contas_para_tentar:
+                contas_para_tentar.append(acc["id"])
+
+        camp_id: str | None = None
+        conta_usada = self._selected_account_id
+        ultimo_erro = ""
 
         async with httpx.AsyncClient(params={"access_token": self._access_token}, timeout=25.0) as client:
-            payload_camp: dict[str, Any] = {
-                "name": plano.nome_campanha,
-                "objective": obj_meta,
-                "status": "PAUSED",
-                "special_ad_categories": special_cats,
-            }
-            if plano.tipo_orcamento.upper() == "CBO":
-                payload_camp["daily_budget"] = str(int(round(plano.orcamento_diario_brl * 100)))
+            for idx_conta, acc_id in enumerate(contas_para_tentar):
+                for payload_camp in _gerar_tentativas_payload():
+                    resp = await client.post(
+                        f"{GRAPH_HOST}/{version}/{acc_id}/campaigns",
+                        data=payload_camp,
+                    )
+                    if resp.status_code == 200:
+                        camp_id = resp.json().get("id")
+                        conta_usada = acc_id
+                        break
+                    ultimo_erro = self._extrair_erro_meta_detalhado(resp)
+                if camp_id:
+                    break
+                # Só tenta na próxima conta ativa se a conta selecionada inicialmente tiver account_status != 1
+                conta_atual_info = next((a for a in self._available_accounts if a["id"] == acc_id), None)
+                if idx_conta == 0 and conta_atual_info and conta_atual_info.get("account_status", 1) == 1:
+                    break
 
-            resp = await client.post(
-                f"{GRAPH_HOST}/{version}/{self._selected_account_id}/campaigns",
-                data=payload_camp,
-            )
-            if resp.status_code != 200:
-                erro_msg = resp.json().get("error", {}).get("message", resp.text)
-                raise ValueError(f"Erro da Meta Graph API ao criar campanha: {erro_msg}")
-            camp_id = resp.json().get("id")
+        if not camp_id:
+            raise ValueError(f"Erro da Meta Graph API ao criar campanha: {ultimo_erro}")
+
+        if conta_usada != self._selected_account_id:
+            self.select_ad_account(conta_usada)
 
         registrada = self.registrar_campanha_do_plano(plano, caminhos_criativos)
         registrada["id"] = camp_id or registrada["id"]
@@ -713,7 +870,7 @@ class MetaAdsHub:
             "account_name": self._selected_account_name,
             "status": "PAUSED",
             "campanha": registrada,
-            "mensagem": f"Campanha '{plano.nome_campanha}' criada com sucesso na sua conta real {self._selected_account_id} (ID: {camp_id}, Status: PAUSED)!",
+            "mensagem": f"Campanha '{plano.nome_campanha}' criada com sucesso na sua conta real {self._selected_account_id} ({self._selected_account_name}) — ID: {camp_id}, Status: PAUSED!",
         }
 
     async def get_copilot_report(self) -> dict[str, Any]:

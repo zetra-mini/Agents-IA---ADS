@@ -86,7 +86,7 @@
     tipo_orcamento: 'CBO',
     orcamento_diario_brl: 500.0,
     estrategia_lance: 'Volume mais alto',
-    categoria_especial_anuncio: 'Crédito',
+    categoria_especial_anuncio: 'Nenhuma',
     conjuntos: [
       {
         nome: 'Conjunto 01 - Campo Largo, Curitiba (Raio 25km)',
@@ -187,7 +187,20 @@
         if (pOllama?.base_url) ollamaUrlInput = pOllama.base_url;
         if (pOpencode?.model) opencodeModelInput = pOpencode.model;
       }
-      if (resCon.ok) connection = await resCon.json();
+      if (resCon.ok) {
+        connection = await resCon.json();
+        const savedToken =
+          tokenInput.trim() ||
+          (typeof localStorage !== 'undefined' ? localStorage.getItem('meta_ads_saved_token') || '' : '');
+        if (!connection.connected && savedToken) {
+          const recon = await fetch('/api/meta/connect-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: savedToken }),
+          });
+          if (recon.ok) connection = await recon.json();
+        }
+      }
       if (resCamp.ok) campanhas = await resCamp.json();
       if (resCop.ok) copilot = await resCop.json();
       if (resPub.ok) {
@@ -207,6 +220,9 @@
     conectandoConta = true;
     try {
       if (tokenInput.trim()) {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('meta_ads_saved_token', tokenInput.trim());
+        }
         const res = await fetch('/api/meta/connect-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -615,7 +631,9 @@
         {#if connection.available_accounts?.length > 0}
           <select class="top-select" value={connection.selected_account_id} onchange={trocarContaAtiva}>
             {#each connection.available_accounts as acc}
-              <option value={acc.id}>{acc.name} ({acc.id})</option>
+              <option value={acc.id}>
+                {acc.account_status === 1 ? '🟢 Ativa' : '⚠️ Pendente'} · {acc.name} ({acc.id})
+              </option>
             {/each}
           </select>
         {/if}

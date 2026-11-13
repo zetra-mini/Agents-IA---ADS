@@ -11,6 +11,7 @@ frontend/dist/
 
 # Segredos e dados locais persistentes
 .env
+.meta_session.json
 browser_profile/
 criativos/*
 !criativos/README.md
