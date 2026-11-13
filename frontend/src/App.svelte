@@ -861,6 +861,8 @@
       notify(data.mensagem);
       chatHistory = [...chatHistory, { autor: 'ia', texto: `🎉 ${data.mensagem}` }];
       await carregarTudo();
+      activeNav = 'dashboard';
+      activeLevelTab = 'ads';
     } catch (err) {
       notify(err.message, 'error');
       chatHistory = [...chatHistory, { autor: 'ia', texto: `⚠️ ${err.message}` }];
@@ -1120,15 +1122,9 @@
           <span class="hamburger-text">Menu</span>
         </button>
 
-        <div class="topbar-breadcrumb">
-          <div class="topbar-brand-chip">
-            <span class="brand-mini-logo">∞</span>
-            <strong>AdSimples AI</strong>
-          </div>
-          <span class="breadcrumb-separator">/</span>
-          <span class="current-section-name">
-            {#if activeNav === 'dashboard'}
-              📊 Gerenciador & Campanhas
+        <span class="current-section-name">
+          {#if activeNav === 'dashboard'}
+            📊 Gerenciador de Anúncios
             {:else if activeNav === 'relatorios'}
               📈 Relatórios & Evolução
             {:else if activeNav === 'assistida'}
@@ -1157,7 +1153,6 @@
               ⚙️ Configurações & Contas
             {/if}
           </span>
-        </div>
       </div>
 
       <div class="topbar-right">
@@ -1206,95 +1201,79 @@
     <!-- CONTEÚDO PRINCIPAL (1 VISÃO LIMPA POR VEZ) -->
     <main class="canvas">
       {#if activeNav === 'dashboard'}
-        <!-- VISÃO 1: GERENCIADOR DE ANÚNCIOS (TABELA OFICIAL EM 3 NÍVEIS + FILTROS META ADS) -->
-        <div class="view-header">
-          <div>
+        <!-- HEADER DA VISÃO DE GERENCIADOR DE ANÚNCIOS (SEM BOTÕES DUPLICADOS, TIPOGRAFIA LIMPA) -->
+        <div class="manager-page-header">
+          <div class="manager-page-title-box">
             <h1>Gerenciador de Anúncios</h1>
-            <p>Controle oficial de Campanhas, Conjuntos e Anúncios com filtros avançados e sincronização Graph API.</p>
+            <p class="manager-page-subtitle">
+              Conta ativa: <strong class="acc-highlight">{connection.selected_account_name || 'Conta dos anúncios'}</strong>
+              <code>{connection.selected_account_id || 'act_3339104319737592'}</code>
+              <span class="sync-dot-badge">● Sincronizado Graph API v22.0</span>
+            </p>
           </div>
-          <div class="view-header-right">
-            <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
+          <div class="manager-page-actions">
+            <a
+              href={connection.selected_account_id ? `https://adsmanager.facebook.com/adsmanager/manage/${activeLevelTab}?act=${connection.selected_account_id.replace('act_', '')}` : 'https://adsmanager.facebook.com/'}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-manager-ghost"
+              title="Abrir no Gerenciador de Anúncios oficial da Meta"
+            >
+              ↗️ Abrir na Meta
+            </a>
+            <button type="button" class="btn-manager-ghost" onclick={carregarTudo} title="Atualizar dados e métricas agora">
+              🔄 Sincronizar
+            </button>
+            <button type="button" class="btn-manager-primary" onclick={() => (activeNav = 'assistida')} title="Criar nova campanha assistida">
               🪄 + Nova Campanha
             </button>
           </div>
         </div>
 
-        <!-- BARRA DOS 3 NÍVEIS OFICIAIS DO GERENCIADOR DE ANÚNCIOS (CAMPANHAS / CONJUNTOS / ANÚNCIOS) -->
-        <div class="meta-manager-level-tabs">
-          <button
-            type="button"
-            class="level-tab-btn"
-            class:active={activeLevelTab === 'campaigns'}
-            onclick={() => (activeLevelTab = 'campaigns')}
-          >
-            <span class="tab-level-icon">📊</span>
-            <span class="tab-level-text">Campanhas</span>
-            <span class="tab-level-badge">{campanhas.length}</span>
-          </button>
-          <button
-            type="button"
-            class="level-tab-btn"
-            class:active={activeLevelTab === 'adsets'}
-            onclick={() => (activeLevelTab = 'adsets')}
-          >
-            <span class="tab-level-icon">📁</span>
-            <span class="tab-level-text">Conjuntos de Anúncios</span>
-            <span class="tab-level-badge">{adsets.length}</span>
-          </button>
-          <button
-            type="button"
-            class="level-tab-btn"
-            class:active={activeLevelTab === 'ads'}
-            onclick={() => (activeLevelTab = 'ads')}
-          >
-            <span class="tab-level-icon">📢</span>
-            <span class="tab-level-text">Anúncios</span>
-            <span class="tab-level-badge">{ads.length}</span>
-          </button>
-        </div>
-
-        <!-- PAINEL PRINCIPAL DO GERENCIADOR DE ANÚNCIOS -->
-        <section class="panel-card">
-          <div class="panel-head">
-            <div>
-              {#if activeLevelTab === 'campaigns'}
-                <h2>Campanhas Meta Ads ({campanhasFiltradas.length} de {campanhas.length})</h2>
-              {:else if activeLevelTab === 'adsets'}
-                <h2>Conjuntos de Anúncios ({adsetsFiltrados.length} de {adsets.length})</h2>
-              {:else}
-                <h2>Anúncios ({adsFiltrados.length} de {ads.length})</h2>
-              {/if}
-              <span class="panel-sub">
-                {connection.somente_dados_reais ? 'Exibindo dados reais da Conta Meta' : 'Sincronizado com Meta Graph API & Sistema'}
-              </span>
-            </div>
-            <div class="adsmanager-head-actions">
-              <a
-                href={connection.selected_account_id ? `https://adsmanager.facebook.com/adsmanager/manage/${activeLevelTab}?act=${connection.selected_account_id.replace('act_', '')}` : 'https://adsmanager.facebook.com/'}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn-top ghost"
-                title="Abrir no Gerenciador de Anúncios oficial"
-              >
-                ↗️ Abrir Gerenciador Meta
-              </a>
-              <button type="button" class="btn-top ghost" onclick={carregarTudo} title="Atualizar dados e métricas agora">
-                🔄 Atualizar
-              </button>
-              <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
-                🪄 + Nova Campanha
-              </button>
-            </div>
+        <!-- PAINEL UNIFICADO DO GERENCIADOR (TABS INTEGRADAS + TOOLBAR + DATA GRID) -->
+        <section class="manager-card-shell">
+          <!-- TABS OFICIAIS INTEGRADAS AO TOPO DO PAINEL -->
+          <div class="manager-integrated-tabs">
+            <button
+              type="button"
+              class="manager-tab-btn"
+              class:active={activeLevelTab === 'campaigns'}
+              onclick={() => (activeLevelTab = 'campaigns')}
+            >
+              <span class="tab-icon">📊</span>
+              <span class="tab-label">Campanhas</span>
+              <span class="tab-count">{campanhas.length}</span>
+            </button>
+            <button
+              type="button"
+              class="manager-tab-btn"
+              class:active={activeLevelTab === 'adsets'}
+              onclick={() => (activeLevelTab = 'adsets')}
+            >
+              <span class="tab-icon">📁</span>
+              <span class="tab-label">Conjuntos de Anúncios</span>
+              <span class="tab-count">{adsets.length}</span>
+            </button>
+            <button
+              type="button"
+              class="manager-tab-btn"
+              class:active={activeLevelTab === 'ads'}
+              onclick={() => (activeLevelTab = 'ads')}
+            >
+              <span class="tab-icon">📢</span>
+              <span class="tab-label">Anúncios</span>
+              <span class="tab-count">{ads.length}</span>
+            </button>
           </div>
 
-          <!-- BARRA DE FERRAMENTAS DO GERENCIADOR (FILTROS COMPLETOS DO GERENCIADOR DE ANÚNCIOS) -->
-          <div class="adsmanager-toolbar">
-            <div class="adsmanager-toolbar-filters">
-              <!-- Filtro 1: Status da Veiculação (Todas, Ativas, Pausadas) -->
-              <div class="status-filter-pills">
+          <!-- BARRA DE FERRAMENTAS / FILTROS PROFISSIONAL -->
+          <div class="manager-toolbar-strip">
+            <div class="manager-toolbar-left">
+              <!-- SEGMENTED CONTROL DE STATUS -->
+              <div class="status-segmented-control">
                 <button
                   type="button"
-                  class="filter-pill"
+                  class="segment-btn"
                   class:active={(activeLevelTab === 'campaigns' ? filtroStatus : (activeLevelTab === 'adsets' ? filtroStatusAdset : filtroStatusAd)) === 'TODAS'}
                   onclick={() => {
                     if (activeLevelTab === 'campaigns') filtroStatus = 'TODAS';
@@ -1306,7 +1285,7 @@
                 </button>
                 <button
                   type="button"
-                  class="filter-pill"
+                  class="segment-btn"
                   class:active={(activeLevelTab === 'campaigns' ? filtroStatus : (activeLevelTab === 'adsets' ? filtroStatusAdset : filtroStatusAd)) === 'ACTIVE'}
                   onclick={() => {
                     if (activeLevelTab === 'campaigns') filtroStatus = 'ACTIVE';
@@ -1318,7 +1297,7 @@
                 </button>
                 <button
                   type="button"
-                  class="filter-pill"
+                  class="segment-btn"
                   class:active={(activeLevelTab === 'campaigns' ? filtroStatus : (activeLevelTab === 'adsets' ? filtroStatusAdset : filtroStatusAd)) === 'PAUSED'}
                   onclick={() => {
                     if (activeLevelTab === 'campaigns') filtroStatus = 'PAUSED';
@@ -1330,8 +1309,8 @@
                 </button>
               </div>
 
-              <!-- Filtro 2: Objetivo da Campanha -->
-              <select bind:value={filtroObjetivo} class="filter-select" title="Filtrar por objetivo de veiculação da Meta">
+              <!-- SELECTS DISCRETOS DE FILTRO -->
+              <select bind:value={filtroObjetivo} class="manager-filter-select" title="Filtrar por objetivo de veiculação da Meta">
                 <option value="TODOS">🎯 Objetivo: Todos</option>
                 <option value="LEAD">🎯 Cadastros / Leads</option>
                 <option value="SALE">🛒 Vendas / Conversões</option>
@@ -1340,23 +1319,20 @@
                 <option value="AWARENESS">📣 Reconhecimento de Marca</option>
               </select>
 
-              <!-- Filtro 3: Tipo de Orçamento (Advantage+ CBO vs ABO) -->
-              <select bind:value={filtroTipoOrcamento} class="filter-select" title="Estratégia de orçamento">
+              <select bind:value={filtroTipoOrcamento} class="manager-filter-select" title="Estratégia de orçamento">
                 <option value="TODOS">💰 Orçamento: Todos</option>
                 <option value="CBO">Advantage+ (CBO)</option>
                 <option value="ABO">Por Conjunto (ABO)</option>
               </select>
 
-              <!-- Filtro 4: Desempenho / Saúde da IA -->
-              <select bind:value={filtroSaude} class="filter-select" title="Classificação de saúde da IA">
+              <select bind:value={filtroSaude} class="manager-filter-select" title="Classificação de saúde da IA">
                 <option value="TODOS">🏷️ Desempenho: Todos</option>
                 <option value="WINNER">🏆 Winners (Escalar)</option>
                 <option value="BLEEDER">🩸 Bleeders (Sangradores)</option>
                 <option value="REAL">🟢 Conta Real</option>
               </select>
 
-              <!-- Filtro 5: Janela de Atribuição -->
-              <select bind:value={filtroPeriodo} class="filter-select" title="Janela de atribuição">
+              <select bind:value={filtroPeriodo} class="manager-filter-select" title="Janela de atribuição">
                 <option value="7d">📅 Últimos 7 dias</option>
                 <option value="14d">📅 Últimos 14 dias</option>
                 <option value="30d">📅 Últimos 30 dias</option>
@@ -1366,16 +1342,16 @@
 
               {#if filtroStatus !== 'TODAS' || filtroStatusAdset !== 'TODAS' || filtroStatusAd !== 'TODAS' || filtroObjetivo !== 'TODOS' || filtroTipoOrcamento !== 'TODOS' || filtroSaude !== 'TODOS' || buscaCampanha || buscaAdset || buscaAd}
                 <button type="button" class="btn-clear-filters" onclick={limparFiltrosGerenciador} title="Limpar todos os filtros">
-                  ✕ Limpar Filtros
+                  ✕ Limpar
                 </button>
               {/if}
             </div>
 
-            <div class="search-box">
+            <div class="manager-search-box">
               {#if activeLevelTab === 'campaigns'}
                 <input
                   type="text"
-                  placeholder="🔍 Pesquisar campanha por nome, ID ou cidade..."
+                  placeholder="🔍 Pesquisar campanha..."
                   bind:value={buscaCampanha}
                 />
                 {#if buscaCampanha}
@@ -1384,7 +1360,7 @@
               {:else if activeLevelTab === 'adsets'}
                 <input
                   type="text"
-                  placeholder="🔍 Pesquisar conjunto por nome, cidade ou ID..."
+                  placeholder="🔍 Pesquisar conjunto..."
                   bind:value={buscaAdset}
                 />
                 {#if buscaAdset}
@@ -1393,7 +1369,7 @@
               {:else}
                 <input
                   type="text"
-                  placeholder="🔍 Pesquisar anúncio por título, copy ou ID..."
+                  placeholder="🔍 Pesquisar anúncio..."
                   bind:value={buscaAd}
                 />
                 {#if buscaAd}
@@ -5061,37 +5037,267 @@
   /* ABAS DOS 3 NÍVEIS HIERÁRQUICOS DO GERENCIADOR DE ANÚNCIOS */
   .meta-manager-level-tabs {
     display: flex;
-    gap: 8px;
-    margin: 18px 0 12px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 2px;
+  /* =========================================================================
+     GERENCIADOR DE ANÚNCIOS — DESIGN SYSTEM PROFISSIONAL SAAS (ESTILO META / STRIPE)
+     ========================================================================= */
+  .manager-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 4px;
+    flex-wrap: wrap;
   }
 
-  .level-tab-btn {
-    display: inline-flex;
+  .manager-page-title-box h1 {
+    font-size: 1.4rem;
+    font-weight: 750;
+    color: #f8fafc;
+    margin: 0 0 4px;
+    letter-spacing: -0.02em;
+  }
+
+  .manager-page-subtitle {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 18px;
-    border: 1px solid transparent;
-    border-bottom: none;
-    border-radius: 8px 8px 0 0;
-    background: transparent;
-    color: var(--muted);
-    font-size: 0.88rem;
+    flex-wrap: wrap;
+  }
+
+  .acc-highlight {
+    color: #f1f5f9;
     font-weight: 600;
+  }
+
+  .manager-page-subtitle code {
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.74rem;
+  }
+
+  .sync-dot-badge {
+    color: #10b981;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .manager-page-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn-manager-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
     cursor: pointer;
+    text-decoration: none;
     transition: all 0.15s ease;
   }
 
-  .level-tab-btn:hover {
+  .btn-manager-ghost:hover {
+    background: #334155;
     color: #fff;
-    background: rgba(255, 255, 255, 0.04);
+    border-color: #475569;
+    transform: translateY(-1px);
   }
 
-  .level-tab-btn.active {
+  .btn-manager-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #0284c7, #2563eb);
+    border: 1px solid rgba(56, 189, 248, 0.4);
     color: #fff;
-    background: #111827;
-    border-color: var(--border);
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+    transition: all 0.15s ease;
+  }
+
+  .btn-manager-primary:hover {
+    background: linear-gradient(135deg, #0369a1, #1d4ed8);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45);
+  }
+
+  /* CARD UNIFICADO DO GERENCIADOR */
+  .manager-card-shell {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 24px;
+  }
+
+  /* TABS INTEGRADAS */
+  .manager-integrated-tabs {
+    display: flex;
+    background: #090e1a;
+    border-bottom: 1px solid #1e293b;
+    padding: 0 12px;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .manager-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #94a3b8;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+
+  .manager-tab-btn:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .manager-tab-btn.active {
+    color: #38bdf8;
+    border-bottom-color: #38bdf8;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  .manager-tab-btn .tab-count {
+    background: #1e293b;
+    color: #cbd5e1;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .manager-tab-btn.active .tab-count {
+    background: rgba(56, 189, 248, 0.2);
+    color: #38bdf8;
+  }
+
+  /* STRIP DE FERRAMENTAS E FILTROS */
+  .manager-toolbar-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #0b1120;
+    border-bottom: 1px solid #1e293b;
+    flex-wrap: wrap;
+  }
+
+  .manager-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* SEGMENTED CONTROL */
+  .status-segmented-control {
+    display: inline-flex;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .segment-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+  }
+
+  .segment-btn:hover {
+    color: #fff;
+  }
+
+  .segment-btn.active {
+    background: #0284c7;
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .manager-filter-select {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    font-size: 0.76rem;
+    padding: 5px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .manager-filter-select:hover,
+  .manager-filter-select:focus {
+    border-color: #38bdf8;
+  }
+
+  .manager-search-box {
+    display: flex;
+    align-items: center;
+    position: relative;
+    min-width: 220px;
+    flex-grow: 1;
+    max-width: 320px;
+  }
+
+  .manager-search-box input {
+    width: 100%;
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 28px 6px 12px;
+    font-size: 0.78rem;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .manager-search-box input:focus {
+    border-color: #38bdf8;
+    background: #172236;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  }
     border-bottom: 2px solid var(--primary);
   }
 

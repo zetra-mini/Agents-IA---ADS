@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 import random
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import date, timedelta
 from itertools import count
 from pathlib import Path
@@ -300,9 +300,34 @@ class MetaAdsHub:
         self._seed_initial_data()
         self._load_session()
 
+    def _dict_to_campaign(self, d: dict[str, Any]) -> CampaignItem:
+        adsets_raw = d.get("adsets", [])
+        ads_raw = d.get("ads", [])
+        adsets: list[AdSetItem] = []
+        valid_as = {f.name for f in fields(AdSetItem)}
+        for a in adsets_raw:
+            adsets.append(AdSetItem(**{k: v for k, v in a.items() if k in valid_as}))
+        ads: list[AdItem] = []
+        valid_ad = {f.name for f in fields(AdItem)}
+        for ad_item in ads_raw:
+            ads.append(AdItem(**{k: v for k, v in ad_item.items() if k in valid_ad}))
+        c_copy = dict(d)
+        c_copy.pop("adsets", None)
+        c_copy.pop("ads", None)
+        valid_camp = {f.name for f in fields(CampaignItem)}
+        camp = CampaignItem(**{k: v for k, v in c_copy.items() if k in valid_camp})
+        camp.adsets = adsets
+        camp.ads = ads
+        return camp
+
     def _save_session(self) -> None:
         """Persiste localmente a sessão da conta Meta (ignorado no Git) para sobreviver a reinicializações."""
         try:
+            real_camps_data = [asdict(c) for c in self._real_campaigns.values()]
+            criadas_usuario = [
+                asdict(c) for c in self._campaigns.values()
+                if c.id not in self._real_campaigns and not c.id.startswith("camp_mock_")
+            ]
             payload = {
                 "access_token": self._access_token,
                 "selected_account_id": self._selected_account_id,
@@ -312,6 +337,10 @@ class MetaAdsHub:
                 "available_accounts": self._available_accounts,
                 "connection_source": self._connection_source,
                 "somente_dados_reais": self._somente_dados_reais,
+                "status_overrides": self._status_overrides,
+                "deleted_ids": list(self._deleted_ids),
+                "real_campaigns": real_camps_data,
+                "user_created_campaigns": criadas_usuario,
             }
             SESSION_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
@@ -339,6 +368,25 @@ class MetaAdsHub:
                 self._connection_source = data["connection_source"]
             if "somente_dados_reais" in data:
                 self._somente_dados_reais = bool(data["somente_dados_reais"])
+            if data.get("status_overrides"):
+                self._status_overrides.update(data["status_overrides"])
+            if data.get("deleted_ids"):
+                self._deleted_ids.update(data["deleted_ids"])
+            if data.get("real_campaigns"):
+                for cd in data["real_campaigns"]:
+                    try:
+                        camp = self._dict_to_campaign(cd)
+                        self._real_campaigns[camp.id] = camp
+                        self._campaigns[camp.id] = camp
+                    except Exception:
+                        pass
+            if data.get("user_created_campaigns"):
+                for cd in data["user_created_campaigns"]:
+                    try:
+                        camp = self._dict_to_campaign(cd)
+                        self._campaigns[camp.id] = camp
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -820,6 +868,7 @@ class MetaAdsHub:
         self._real_campaigns = novas_reais
 
         self._insights[cid] = self._generate_series(plano.orcamento_diario_brl, 1.28, "ACTIVE")
+        self._save_session()
         return self._serialize_campaign(camp, is_real=True)
 
     def _serialize_campaign(self, camp: CampaignItem, is_real: bool = False) -> dict[str, Any]:
