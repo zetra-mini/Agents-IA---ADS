@@ -136,6 +136,29 @@
     }
   }
 
+  let abrindoNavegador = $state(false);
+  let avisoNavegador = $state('');
+
+  async function abrirNavegadorDireto() {
+    abrindoNavegador = true;
+    avisoNavegador = '';
+    erroExecucao = '';
+    try {
+      const res = await fetch('/api/campanhas/abrir-navegador', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Falha ao abrir navegador.');
+      }
+      avisoNavegador = data.resultado_navegador || 'Navegador aberto com sucesso.';
+    } catch (err) {
+      avisoNavegador = 'Erro ao abrir navegador: ' + err.message;
+    } finally {
+      abrindoNavegador = false;
+    }
+  }
+
   onMount(carregarEstadoInicial);
 </script>
 
@@ -302,6 +325,21 @@
           >
             Somente Planejar (CrewAI JSON)
           </button>
+        </div>
+
+        <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px;">
+          <button
+            class="btn-ghost"
+            style="width: 100%; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;"
+            type="button"
+            disabled={abrindoNavegador}
+            onclick={abrirNavegadorDireto}
+          >
+            {abrindoNavegador ? '🌐 Abrindo Gerenciador...' : '🌐 Abrir Gerenciador de Anúncios no Navegador (Meta Ads)'}
+          </button>
+          {#if avisoNavegador}
+            <div class="alert info" style="margin-top: 10px; font-size: 0.85rem;">{avisoNavegador}</div>
+          {/if}
         </div>
       </article>
     </div>

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from agentes import CampanhaMetaAdsPlan, planejar_campanha
-from automacao import executar_rascunho_meta_ads
+from automacao import abrir_navegador_direto, executar_rascunho_meta_ads
 from criativos import (
     listar_criativos,
     resolver_pasta_criativos,
@@ -208,3 +208,15 @@ async def criar_campanha(payload: ComandoCampanhaRequest) -> CampanhaResposta:
             status_code=500,
             detail=f"Plano criado, mas falhou a automação browser-use: {exc}",
         ) from exc
+
+
+@app.post("/campanhas/abrir-navegador")
+async def abrir_navegador_meta_ads(url: str | None = None) -> dict[str, Any]:
+    """Abre uma instância do navegador diretamente no Gerenciador de Anúncios."""
+    cfg = get_settings()
+    alvo = url or cfg.meta_ads_url
+    return await abrir_navegador_direto(
+        url=alvo,
+        headless=cfg.browser_headless,
+        user_data_dir=cfg.browser_user_data_dir,
+    )

@@ -183,3 +183,12 @@ def test_fastapi_endpoints_with_mocks(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert body["criativos_encontrados"]["total"] == 2
     assert body["automacao"]["status"] == "rascunho_criado"
     assert body["automacao"]["provider"] == "anthropic"
+
+
+def test_fallback_deterministico_when_llm_offline() -> None:
+    plan = agentes.gerar_plano_fallback_deterministico(
+        "Criar campanha CBO de leads para repasse de financiamento, R$ 500/dia, para Campo Largo e Curitiba"
+    )
+    assert plan.orcamento_diario_brl == 500.0
+    assert plan.tipo_orcamento == "CBO"
+    assert any("Curitiba" in cid for cid in plan.conjuntos[0].publico.localizacoes)

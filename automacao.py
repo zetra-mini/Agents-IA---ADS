@@ -7,12 +7,15 @@ e preenche a campanha no `adsmanager.facebook.com`, salvando obrigatoriamente co
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
 from agentes import CampanhaMetaAdsPlan
 from llm_config import Settings, build_browser_use_llm, get_settings, resolve_provider_config
+
+logger = logging.getLogger("meta_ads_automacao")
 
 
 def construir_prompt_navegador(
@@ -119,5 +122,69 @@ async def executar_rascunho_meta_ads(
             "resultado_navegador": final_text,
             "erros": [err for err in history.errors() if err],
         }
+    except Exception as exc:
+        logger.warning(
+            f"browser-use agent encontrou erro ao orquestrar via LLM ({exc}). "
+            "Iniciando navegador Playwright diretamente no Meta Ads..."
+        )
+        return await abrir_navegador_direto(
+            url=cfg.meta_ads_url,
+            headless=cfg.browser_headless,
+            user_data_dir=str(profile_dir),
+            motivo=f"Agente IA encontrou erro ({exc}). Navegador aberto diretamente no Gerenciador de Anúncios.",
+        )
     finally:
-        await browser.stop()
+        try:
+            await browser.stop()
+        except Exception:
+            pass
+
+
+async def abrir_navegador_direto(
+    url: str,
+    headless: bool = False,
+    user_data_dir: str | None = None,
+    motivo: str | None = None,
+) -> dict[str, Any]:
+    """Abre uma instância do Chromium com perfil persistente direto na URL do Meta Ads."""
+    from playwright.async_api import async_playwright
+
+    profile = Path(user_data_dir or "./browser_profile").resolve()
+    profile.mkdir(parents=True, exist_ok=True)
+
+    try:
+        async with async_playwright() as p:
+            context = await p.chromium.launch_persistent_context(
+                user_data_dir=str(profile),
+                headless=headless,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            page = context.pages[0] if context.pages else await context.new_page()
+            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            url_atual = page.url
+            precisa_login = "login" in url_atual.lower() or "checkpoint" in url_atual.lower()
+            return {
+                "status": "auth_required" if precisa_login else "navegador_aberto",
+                "provider": "playwright_direto",
+                "model": "chromium",
+                "criativos_anexados": [],
+                "steps_executados": 1,
+                "sucesso": True,
+                "resultado_navegador": (
+                    f"Navegador aberto em '{url_atual}'. "
+                    + ("Atenção: Faça login na sua conta do Meta Ads no navegador." if precisa_login else "Gerenciador de Anúncios acessado com sucesso.")
+                    + (f" ({motivo})" if motivo else "")
+                ),
+                "erros": [],
+            }
+    except Exception as exc:
+        return {
+            "status": "erro_navegador",
+            "provider": "playwright_direto",
+            "model": "chromium",
+            "criativos_anexados": [],
+            "steps_executados": 0,
+            "sucesso": False,
+            "resultado_navegador": f"Falha ao abrir navegador: {exc}",
+            "erros": [str(exc)],
+        }

@@ -89,8 +89,8 @@ class Settings(BaseSettings):
     opencode_api_key: str = "opencode"
 
     # 2. Ollama (100% Localhost)
-    ollama_model: str = "qwen2.5:7b"
-    ollama_base_url: str = "http://host.docker.internal:11434"
+    ollama_model: str = "qwen2.5:0.5b"
+    ollama_base_url: str = "http://127.0.0.1:11434"
 
     # 3. Opções Externas
     anthropic_api_key: str = ""
@@ -104,7 +104,7 @@ class Settings(BaseSettings):
 
     # Automação browser-use & Meta Ads
     meta_ads_url: str = "https://adsmanager.facebook.com/adsmanager/manage/campaigns"
-    browser_headless: bool = True
+    browser_headless: bool = False
     browser_user_data_dir: str = "/app/browser_profile"
     browser_max_steps: int = 40
     creatives_dir: str = "./criativos"
