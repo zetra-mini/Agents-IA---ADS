@@ -330,7 +330,7 @@
         <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px;">
           <button
             class="btn-ghost"
-            style="width: 100%; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;"
+            style="width: 100%; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; padding: 10px 14px; text-align: center; white-space: normal; line-height: 1.4; border-radius: 8px;"
             type="button"
             disabled={abrindoNavegador}
             onclick={abrirNavegadorDireto}
