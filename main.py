@@ -24,6 +24,11 @@ from criativos import (
 )
 from llm_config import get_settings, list_providers, update_provider_credentials
 from meta_hub import LOJA_PUBLICOS_ADSIMPLES, get_meta_hub, validar_campanha_preflight
+from openadkit_hub import (
+    BENCHMARKS_OPENADKIT_PT,
+    FRAMEWORKS_COPY_PT,
+    get_openadkit_hub,
+)
 
 logger = logging.getLogger("meta_ads_api")
 settings = get_settings()
@@ -439,3 +444,123 @@ async def publicar_campanha_assistida_graph(body: PublicarAssistidoRequest) -> d
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao criar na Graph API: {exc}") from exc
+
+
+# =========================================================================
+# ROTAS DO OPENADKIT + PIPEBOARD META ADS MCP (100% PORTUGUÊS-BR)
+# =========================================================================
+
+
+class ExtrairUrlBrandRequest(BaseModel):
+    url: str
+    business_name: str | None = None
+    service_area: str | None = None
+
+
+class GerarOpenAdKitRequest(BaseModel):
+    generator_id: str = "meta_ads_3_angulos"
+    produto_oferta: str = ""
+    objetivo: str = "Leads"
+    formato: str = "Feed & Reels"
+    promocao: str = ""
+    cidades: str = "Curitiba, Campo Largo"
+    cta_preferido: str = "Enviar mensagem"
+
+
+class AvaliarCreativeScoreRequest(BaseModel):
+    texto_principal: str
+    titulo: str = ""
+    cta: str = "Saiba mais"
+    plataforma: str = "Meta Feed & Reels"
+
+
+class EspionarConcorrenteRequest(BaseModel):
+    anuncio_concorrente: str
+    nome_concorrente: str = "Concorrente da Região"
+    nosso_diferencial: str = ""
+
+
+class ExecutarPipeboardMcpRequest(BaseModel):
+    tool_id: str
+    query: str = ""
+
+
+@app.get("/openadkit/hub")
+async def obter_hub_openadkit_e_mcp() -> dict[str, Any]:
+    """Retorna todo o ecossistema OpenAdKit + Pipeboard Meta Ads MCP em Português-BR."""
+    oak = get_openadkit_hub()
+    mhub = get_meta_hub()
+    dados_brains = oak.list_brains()
+    return {
+        **dados_brains,
+        "benchmarks": BENCHMARKS_OPENADKIT_PT,
+        "frameworks_copy": FRAMEWORKS_COPY_PT,
+        "pipeboard_mcp_tools": mhub.list_pipeboard_mcp_tools(),
+    }
+
+
+@app.post("/openadkit/brand-brain")
+async def salvar_ou_selecionar_brand_brain(body: dict[str, Any]) -> dict[str, Any]:
+    """Seleciona um cliente ativo, aplica um dos 10 templates de nicho ou salva o Cérebro da Marca."""
+    return get_openadkit_hub().select_or_save_brain(body)
+
+
+@app.post("/openadkit/brand-brain/extract-url")
+async def extrair_brand_brain_de_url(body: ExtrairUrlBrandRequest) -> dict[str, Any]:
+    """Extrai o Cérebro da Marca automaticamente de qualquer URL (estilo OpenAdKit /api/ingest)."""
+    try:
+        return await get_openadkit_hub().extract_brand_brain_from_url(
+            url=body.url,
+            business_name_override=body.business_name,
+            service_area_override=body.service_area,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao extrair URL: {exc}") from exc
+
+
+@app.post("/openadkit/generate")
+async def gerar_conteudo_openadkit(body: GerarOpenAdKitRequest) -> dict[str, Any]:
+    """Gera 3 variantes de anúncios Meta Ads, 6 roteiros de Reels (10 fórmulas) e Kit Completo de Lançamento."""
+    return get_openadkit_hub().gerar_anuncios_openadkit(
+        generator_id=body.generator_id,
+        produto_oferta=body.produto_oferta,
+        objetivo=body.objetivo,
+        formato=body.formato,
+        promocao=body.promocao,
+        cidades=body.cidades,
+        cta_preferido=body.cta_preferido,
+    )
+
+
+@app.post("/openadkit/creative-score")
+async def avaliar_score_criativo(body: AvaliarCreativeScoreRequest) -> dict[str, Any]:
+    """Pontua o anúncio nas 5 alavancas do OpenAdKit (0-10) e devolve 3 correções exatas + copy pronta."""
+    return get_openadkit_hub().avaliar_creative_score(
+        texto_principal=body.texto_principal,
+        titulo=body.titulo,
+        cta=body.cta,
+        plataforma=body.plataforma,
+    )
+
+
+@app.post("/openadkit/steal-beat")
+async def espionar_e_bater_concorrente(body: EspionarConcorrenteRequest) -> dict[str, Any]:
+    """Desmonta o anúncio do concorrente (Steal & Beat) e gera 3 anúncios superiores em Português-BR."""
+    return get_openadkit_hub().espionar_e_superar_concorrente(
+        anuncio_concorrente=body.anuncio_concorrente,
+        nome_concorrente=body.nome_concorrente,
+        nosso_diferencial=body.nosso_diferencial,
+    )
+
+
+@app.post("/meta/mcp/execute")
+async def executar_ferramenta_pipeboard_mcp(body: ExecutarPipeboardMcpRequest) -> dict[str, Any]:
+    """Executa qualquer ferramenta oficial do Pipeboard Meta Ads MCP (interesses, cidades, páginas, adsets, insights)."""
+    try:
+        return await get_meta_hub().mcp_execute_tool(body.tool_id, body.query)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao executar ferramenta MCP: {exc}") from exc

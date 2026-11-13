@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import SimuladorMetaAds from './SimuladorMetaAds.svelte';
+  import OpenAdKitStudio from './OpenAdKitStudio.svelte';
 
   // Navegação principal do SaaS Premium (exibe apenas 1 visão limpa por vez)
   let activeNav = $state(
@@ -610,6 +611,17 @@
         <span class="nav-icon">🪄</span>
         <span>Criação Assistida</span>
         <span class="nav-badge">4 Etapas</span>
+      </button>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'openadkit'}
+        onclick={() => (activeNav = 'openadkit')}
+      >
+        <span class="nav-icon">🧰</span>
+        <span>OpenAdKit & MCP</span>
+        <span class="nav-badge">PT-BR</span>
       </button>
 
       <button
@@ -1377,6 +1389,17 @@
             {/each}
           </div>
         </section>
+
+      {:else if activeNav === 'openadkit'}
+        <!-- VISÃO OPENADKIT & PIPEBOARD META ADS MCP (100% PORTUGUÊS-BR) -->
+        <OpenAdKitStudio
+          bind:planoAssistido
+          onAplicarNaCampanha={() => {
+            activeNav = 'assistida';
+            etapaAssistida = 3;
+          }}
+          onNotificar={notify}
+        />
 
       {:else if activeNav === 'automacao'}
         <!-- VISÃO 4: AUTOMAÇÃO VISUAL NO GERENCIADOR DE ANÚNCIOS (Mouse IA em Tempo Real) -->
