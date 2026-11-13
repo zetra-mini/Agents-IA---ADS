@@ -217,6 +217,24 @@ async def abrir_navegador_direto(
             await page.goto(url, wait_until="domcontentloaded", timeout=45000)
             try:
                 await page.bring_to_front()
+                await page.evaluate(
+                    """() => {
+                        if (document.getElementById('ia-playwright-cursor')) return;
+                        const cursor = document.createElement('div');
+                        cursor.id = 'ia-playwright-cursor';
+                        cursor.style.cssText = 'position:fixed;top:20px;left:20px;width:22px;height:22px;border-radius:50%;background:rgba(56,189,248,0.85);border:2px solid #fff;box-shadow:0 0 14px rgba(56,189,248,0.9);pointer-events:none;z-index:2147483647;transition:transform 0.08s linear;';
+                        const label = document.createElement('div');
+                        label.textContent = '🤖 Agente IA Meta Ads';
+                        label.style.cssText = 'position:absolute;left:26px;top:0;background:#0f172a;color:#38bdf8;padding:3px 8px;border-radius:6px;font-size:11px;font-family:sans-serif;font-weight:bold;white-space:nowrap;border:1px solid #38bdf8;';
+                        cursor.appendChild(label);
+                        document.body.appendChild(cursor);
+                        document.addEventListener('mousemove', (e) => {
+                            cursor.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+                        });
+                    }"""
+                )
+                for pos_x, pos_y in [(180, 140), (420, 260), (310, 340)]:
+                    await page.mouse.move(pos_x, pos_y, steps=18)
             except Exception:
                 pass
             url_atual = page.url

@@ -1,8 +1,14 @@
 <script>
   import { onMount } from 'svelte';
+  import SimuladorMetaAds from './SimuladorMetaAds.svelte';
 
   const EXEMPLO_INSTRUCAO =
     'Criar campanha CBO de leads para repasse de financiamento, R$ 500/dia, para Campo Largo e Curitiba';
+
+  let simuladorRef = $state(null);
+  let modoTelaCheiaGerenciador = $state(
+    typeof window !== 'undefined' && window.location.search.includes('view=adsmanager')
+  );
 
   let apiOnline = $state(false);
   let healthInfo = $state(null);
@@ -112,9 +118,6 @@
     resultado = null;
 
     const acionarNavegador = somentePlanejar ? false : executarNavegador;
-    if (acionarNavegador) {
-      window.open(META_ADS_URL, '_blank', 'noopener,noreferrer');
-    }
 
     try {
       const res = await fetch('/api/campanhas/criar', {
@@ -132,6 +135,11 @@
         throw new Error(data.detail || 'Erro na execução da campanha.');
       }
       resultado = data;
+      if (acionarNavegador) {
+        setTimeout(() => {
+          simuladorRef?.iniciarDemonstracaoVisual();
+        }, 80);
+      }
     } catch (err) {
       erroExecucao = err.message;
     } finally {
@@ -149,8 +157,9 @@
     avisoNavegador = '';
     erroExecucao = '';
 
-    // Abre imediatamente uma nova guia no navegador atual do usuário
-    window.open(META_ADS_URL, '_blank', 'noopener,noreferrer');
+    // Inicia imediatamente o cursor animado no Gerenciador de Anúncios na tela e abre nova guia dedicada
+    simuladorRef?.iniciarDemonstracaoVisual();
+    window.open('/?view=adsmanager', '_blank');
 
     try {
       const res = await fetch('/api/campanhas/abrir-navegador', {
@@ -160,9 +169,9 @@
       if (!res.ok) {
         throw new Error(data.detail || 'Falha ao abrir navegador.');
       }
-      avisoNavegador = data.resultado_navegador || 'Nova guia aberta no Gerenciador de Anúncios.';
+      avisoNavegador = data.resultado_navegador || 'Automação visual iniciada no Gerenciador de Anúncios.';
     } catch (err) {
-      avisoNavegador = 'Nova guia aberta no navegador (' + META_ADS_URL + ').';
+      avisoNavegador = 'Automação visual iniciada no Gerenciador de Anúncios.';
     } finally {
       abrindoNavegador = false;
     }
@@ -185,6 +194,40 @@
       {apiOnline ? 'API Conectada' : 'API Offline'}
     </div>
   </header>
+
+  {#if modoTelaCheiaGerenciador}
+    <section style="margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 12px; flex-wrap: wrap;">
+        <span style="font-size: 0.85rem; color: #38bdf8; font-weight: 700;">
+          🖱️ Modo Tela Cheia — Automação Visual do Gerenciador de Anúncios (Mouse IA em Tempo Real)
+        </span>
+        <div style="display: flex; gap: 8px;">
+          <a
+            href={META_ADS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-ghost"
+            style="text-decoration: none;"
+          >
+            🔗 Login Real no Facebook Ads
+          </a>
+          <button
+            class="btn-ghost"
+            type="button"
+            onclick={() => (modoTelaCheiaGerenciador = false)}
+          >
+            Voltar ao Painel Dividido
+          </button>
+        </div>
+      </div>
+      <SimuladorMetaAds
+        bind:this={simuladorRef}
+        plano={resultado?.plano_campanha}
+        criativos={criativosLista}
+        autoStart={true}
+      />
+    </section>
+  {/if}
 
   <section class="grid">
     <!-- Coluna Esquerda: Configurações + Criativos + Comando -->
@@ -353,8 +396,15 @@
       </article>
     </div>
 
-    <!-- Coluna Direita: Resultado Estruturado -->
+    <!-- Coluna Direita: Execução Visual no Gerenciador + Resultado Estruturado -->
     <div class="stack">
+      <SimuladorMetaAds
+        bind:this={simuladorRef}
+        plano={resultado?.plano_campanha}
+        criativos={criativosLista}
+        autoStart={true}
+      />
+
       <article class="card result-card">
         <div class="card-head">
           <h2>Resultado da Orquestração</h2>
