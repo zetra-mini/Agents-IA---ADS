@@ -5034,9 +5034,6 @@
     font-size: 0.82rem;
   }
 
-  /* ABAS DOS 3 NÍVEIS HIERÁRQUICOS DO GERENCIADOR DE ANÚNCIOS */
-  .meta-manager-level-tabs {
-    display: flex;
   /* =========================================================================
      GERENCIADOR DE ANÚNCIOS — DESIGN SYSTEM PROFISSIONAL SAAS (ESTILO META / STRIPE)
      ========================================================================= */
@@ -5297,26 +5294,6 @@
     border-color: #38bdf8;
     background: #172236;
     box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
-  }
-    border-bottom: 2px solid var(--primary);
-  }
-
-  .tab-level-icon {
-    font-size: 1rem;
-  }
-
-  .tab-level-badge {
-    background: #1f2937;
-    color: #94a3b8;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 700;
-  }
-
-  .level-tab-btn.active .tab-level-badge {
-    background: var(--primary);
-    color: #fff;
   }
 
   .opt-goal-badge {
