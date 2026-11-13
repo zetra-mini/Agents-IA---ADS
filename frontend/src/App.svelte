@@ -112,6 +112,9 @@
     resultado = null;
 
     const acionarNavegador = somentePlanejar ? false : executarNavegador;
+    if (acionarNavegador) {
+      window.open(META_ADS_URL, '_blank', 'noopener,noreferrer');
+    }
 
     try {
       const res = await fetch('/api/campanhas/criar', {
@@ -136,6 +139,8 @@
     }
   }
 
+  const META_ADS_URL = 'https://adsmanager.facebook.com/adsmanager/manage/campaigns';
+
   let abrindoNavegador = $state(false);
   let avisoNavegador = $state('');
 
@@ -143,6 +148,10 @@
     abrindoNavegador = true;
     avisoNavegador = '';
     erroExecucao = '';
+
+    // Abre imediatamente uma nova guia no navegador atual do usuário
+    window.open(META_ADS_URL, '_blank', 'noopener,noreferrer');
+
     try {
       const res = await fetch('/api/campanhas/abrir-navegador', {
         method: 'POST',
@@ -151,9 +160,9 @@
       if (!res.ok) {
         throw new Error(data.detail || 'Falha ao abrir navegador.');
       }
-      avisoNavegador = data.resultado_navegador || 'Navegador aberto com sucesso.';
+      avisoNavegador = data.resultado_navegador || 'Nova guia aberta no Gerenciador de Anúncios.';
     } catch (err) {
-      avisoNavegador = 'Erro ao abrir navegador: ' + err.message;
+      avisoNavegador = 'Nova guia aberta no navegador (' + META_ADS_URL + ').';
     } finally {
       abrindoNavegador = false;
     }

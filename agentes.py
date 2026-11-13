@@ -2,16 +2,36 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
+import socket
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
-from llm_config import build_crewai_llm
+from llm_config import build_crewai_llm, resolve_provider_config
 
 logger = logging.getLogger("meta_ads_agentes")
+
+
+def _endpoint_local_acessivel(base_url: str | None, timeout: float = 0.3) -> bool:
+    """Verifica rapidamente se um endpoint HTTP local está escutando na porta."""
+    if not base_url:
+        return True
+    parsed = urlparse(base_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    if host not in {"127.0.0.1", "localhost", "host.docker.internal"}:
+        return True
+    check_host = "127.0.0.1" if host == "host.docker.internal" else host
+    try:
+        with socket.create_connection((check_host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 class PublicoAlvo(BaseModel):
@@ -310,14 +330,30 @@ async def planejar_campanha(
     provider_override: str | None = None,
     criativos_disponiveis: list[dict[str, Any]] | None = None,
 ) -> CampanhaMetaAdsPlan:
-    """Executa a Crew de forma assíncrona com fallback automático em caso de falha de conexão com LLM."""
+    """Executa a Crew de forma assíncrona com fallback imediato caso o LLM local esteja offline ou seja micro-CPU."""
+    resolved = resolve_provider_config(provider_override)
+
+    # Evita travamento de CPU em modelos locais sub-3B (0.5b/1b) ou endpoints locais desligados
+    if resolved.provider in {"opencode", "ollama"}:
+        modelo_micro_cpu = any(tag in resolved.model.lower() for tag in (":0.5b", ":1b"))
+        if not _endpoint_local_acessivel(resolved.base_url) or modelo_micro_cpu:
+            logger.info(
+                "Usando estruturador determinístico rápido para '%s' (%s) sem bloquear a CPU.",
+                resolved.provider,
+                resolved.model,
+            )
+            return gerar_plano_fallback_deterministico(instrucao, criativos_disponiveis)
+
     try:
         crew = criar_crew_meta_ads(provider_override=provider_override)
-        result = await crew.akickoff(
-            inputs={
-                "instrucao": instrucao,
-                "criativos_contexto": _formatar_lista_criativos(criativos_disponiveis),
-            }
+        result = await asyncio.wait_for(
+            crew.akickoff(
+                inputs={
+                    "instrucao": instrucao,
+                    "criativos_contexto": _formatar_lista_criativos(criativos_disponiveis),
+                }
+            ),
+            timeout=15.0,
         )
         return extrair_plano_estruturado(result)
     except Exception as exc:

@@ -12,10 +12,14 @@ import os
 from pathlib import Path
 from typing import Any
 
-from agentes import CampanhaMetaAdsPlan
+from agentes import CampanhaMetaAdsPlan, _endpoint_local_acessivel
 from llm_config import Settings, build_browser_use_llm, get_settings, resolve_provider_config
 
 logger = logging.getLogger("meta_ads_automacao")
+
+# Mantém a instância do navegador persistente viva entre chamadas no modo desktop (headless=False)
+_playwright_instance: Any = None
+_persistent_context: Any = None
 
 
 def construir_prompt_navegador(
@@ -79,12 +83,31 @@ async def executar_rascunho_meta_ads(
 
     cfg = settings or get_settings()
     resolved = resolve_provider_config(provider_override, cfg)
-    llm = build_browser_use_llm(provider_override, cfg)
 
     profile_dir = Path(cfg.browser_user_data_dir)
     if not profile_dir.exists() and cfg.browser_user_data_dir.startswith("/app/"):
         profile_dir = Path(__file__).resolve().parent / "browser_profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
+
+    caminhos_validos = [str(Path(p).resolve()) for p in (caminhos_criativos or []) if Path(p).is_file()]
+
+    # Se o motor local estiver offline ou for um modelo micro de CPU sem suporte a visão,
+    # abre imediatamente a nova guia no Gerenciador de Anúncios sem travar a requisição.
+    if resolved.provider in {"opencode", "ollama"}:
+        modelo_micro_cpu = any(tag in resolved.model.lower() for tag in (":0.5b", ":1b"))
+        if not _endpoint_local_acessivel(resolved.base_url) or modelo_micro_cpu:
+            res_direto = await abrir_navegador_direto(
+                url=cfg.meta_ads_url,
+                headless=cfg.browser_headless,
+                user_data_dir=str(profile_dir),
+                motivo=f"Plano pronto ({plano.nome_campanha}). Guia aberta no Meta Ads Manager.",
+            )
+            res_direto["provider"] = resolved.provider
+            res_direto["model"] = resolved.model
+            res_direto["criativos_anexados"] = caminhos_validos
+            return res_direto
+
+    llm = build_browser_use_llm(provider_override, cfg)
 
     # Em containers Docker Linux (como root ou sem userns), o sandbox do Chromium precisa ficar desativado.
     in_docker = os.getenv("IN_DOCKER", "").lower() in {"1", "true", "yes"}
@@ -95,7 +118,6 @@ async def executar_rascunho_meta_ads(
         user_data_dir=str(profile_dir),
     )
 
-    caminhos_validos = [str(Path(p).resolve()) for p in (caminhos_criativos or []) if Path(p).is_file()]
     task_prompt = construir_prompt_navegador(plano, cfg.meta_ads_url, caminhos_validos)
 
     agent = Agent(
@@ -146,37 +168,74 @@ async def abrir_navegador_direto(
     user_data_dir: str | None = None,
     motivo: str | None = None,
 ) -> dict[str, Any]:
-    """Abre uma instância do Chromium com perfil persistente direto na URL do Meta Ads."""
+    """Abre uma nova guia no Chromium com perfil persistente direto na URL do Meta Ads e mantém a janela aberta."""
+    global _playwright_instance, _persistent_context
     from playwright.async_api import async_playwright
 
-    profile = Path(user_data_dir or "./browser_profile").resolve()
+    raw_dir = user_data_dir or "./browser_profile"
+    profile = Path(raw_dir)
+    if not profile.exists() and raw_dir.startswith("/app/"):
+        profile = Path(__file__).resolve().parent / "browser_profile"
+    profile = profile.resolve()
     profile.mkdir(parents=True, exist_ok=True)
 
     try:
-        async with async_playwright() as p:
-            context = await p.chromium.launch_persistent_context(
-                user_data_dir=str(profile),
-                headless=headless,
-                args=["--no-sandbox", "--disable-dev-shm-usage"],
-            )
-            page = context.pages[0] if context.pages else await context.new_page()
+        if headless:
+            async with async_playwright() as p:
+                context = await p.chromium.launch_persistent_context(
+                    user_data_dir=str(profile),
+                    headless=True,
+                    args=["--no-sandbox", "--disable-dev-shm-usage"],
+                )
+                page = context.pages[0] if context.pages else await context.new_page()
+                await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                url_atual = page.url
+        else:
+            # Modo visual desktop: mantém o navegador aberto e abre uma nova guia a cada chamada
+            if _playwright_instance is None:
+                _playwright_instance = await async_playwright().start()
+
+            context_alive = False
+            if _persistent_context is not None:
+                try:
+                    _ = _persistent_context.pages
+                    context_alive = True
+                except Exception:
+                    context_alive = False
+
+            if not context_alive:
+                _persistent_context = await _playwright_instance.chromium.launch_persistent_context(
+                    user_data_dir=str(profile),
+                    headless=False,
+                    args=["--no-sandbox", "--disable-dev-shm-usage"],
+                )
+                pages = _persistent_context.pages
+                page = pages[0] if pages and pages[0].url == "about:blank" else await _persistent_context.new_page()
+            else:
+                page = await _persistent_context.new_page()
+
             await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            try:
+                await page.bring_to_front()
+            except Exception:
+                pass
             url_atual = page.url
-            precisa_login = "login" in url_atual.lower() or "checkpoint" in url_atual.lower()
-            return {
-                "status": "auth_required" if precisa_login else "navegador_aberto",
-                "provider": "playwright_direto",
-                "model": "chromium",
-                "criativos_anexados": [],
-                "steps_executados": 1,
-                "sucesso": True,
-                "resultado_navegador": (
-                    f"Navegador aberto em '{url_atual}'. "
-                    + ("Atenção: Faça login na sua conta do Meta Ads no navegador." if precisa_login else "Gerenciador de Anúncios acessado com sucesso.")
-                    + (f" ({motivo})" if motivo else "")
-                ),
-                "erros": [],
-            }
+
+        precisa_login = "login" in url_atual.lower() or "checkpoint" in url_atual.lower()
+        return {
+            "status": "auth_required" if precisa_login else "navegador_aberto",
+            "provider": "playwright_direto",
+            "model": "chromium",
+            "criativos_anexados": [],
+            "steps_executados": 1,
+            "sucesso": True,
+            "resultado_navegador": (
+                f"Nova guia aberta em '{url_atual}'. "
+                + ("Atenção: Faça login na sua conta do Meta Ads no navegador." if precisa_login else "Gerenciador de Anúncios acessado com sucesso.")
+                + (f" ({motivo})" if motivo else "")
+            ),
+            "erros": [],
+        }
     except Exception as exc:
         return {
             "status": "erro_navegador",
