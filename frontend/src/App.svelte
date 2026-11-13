@@ -482,6 +482,11 @@
   }
 
   async function criarCampanhaDiretoGraphApi() {
+    if (!connection.has_token) {
+      showConnectModal = true;
+      notify('Confirme seu Meta Access Token uma última vez para gravar na sessão persistente e criar a campanha.', 'error');
+      return;
+    }
     publicandoReal = true;
     try {
       const res = await fetch('/api/campanhas/assistida/publicar-graph', {
