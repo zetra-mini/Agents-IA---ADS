@@ -30,6 +30,12 @@
 
   async function carregarEstadoInicial() {
     try {
+      const salvo = localStorage.getItem('meta_ads_ultimo_plano');
+      if (salvo && !resultado) {
+        resultado = JSON.parse(salvo);
+      }
+    } catch (_) {}
+    try {
       const [resHealth, resProv] = await Promise.all([
         fetch('/api/health'),
         fetch('/api/providers'),
@@ -135,6 +141,9 @@
         throw new Error(data.detail || 'Erro na execução da campanha.');
       }
       resultado = data;
+      try {
+        localStorage.setItem('meta_ads_ultimo_plano', JSON.stringify(data));
+      } catch (_) {}
       if (acionarNavegador) {
         setTimeout(() => {
           simuladorRef?.iniciarDemonstracaoVisual();
@@ -198,25 +207,16 @@
   {#if modoTelaCheiaGerenciador}
     <section style="margin-bottom: 24px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 12px; flex-wrap: wrap;">
-        <span style="font-size: 0.85rem; color: #38bdf8; font-weight: 700;">
-          🖱️ Modo Tela Cheia — Automação Visual do Gerenciador de Anúncios (Mouse IA em Tempo Real)
+        <span style="font-size: 0.88rem; color: #38bdf8; font-weight: 700;">
+          🖱️ Guia Dedicada — Gerenciador de Anúncios com Agente IA Criando Campanha em Tempo Real
         </span>
         <div style="display: flex; gap: 8px;">
-          <a
-            href={META_ADS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="btn-ghost"
-            style="text-decoration: none;"
-          >
-            🔗 Login Real no Facebook Ads
-          </a>
           <button
             class="btn-ghost"
             type="button"
             onclick={() => (modoTelaCheiaGerenciador = false)}
           >
-            Voltar ao Painel Dividido
+            ⚙️ Ver Painel Completo
           </button>
         </div>
       </div>
@@ -227,8 +227,7 @@
         autoStart={true}
       />
     </section>
-  {/if}
-
+  {:else}
   <section class="grid">
     <!-- Coluna Esquerda: Configurações + Criativos + Comando -->
     <div class="stack">
@@ -491,6 +490,7 @@
       </article>
     </div>
   </section>
+  {/if}
 </main>
 
 <style>
