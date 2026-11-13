@@ -34,7 +34,7 @@ COPY --chown=appuser:appuser . .
 
 USER appuser
 
-EXPOSE 8000
+EXPOSE 8010
 
 # Bind explícito em 0.0.0.0 para evitar escuta apenas em IPv6 dentro do container
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]

@@ -111,7 +111,7 @@ class Settings(BaseSettings):
 
     # API FastAPI & Dashboards Astro/Svelte
     app_host: str = "0.0.0.0"
-    app_port: int = 8000
+    app_port: int = 8010
     cors_origins: str = (
         "http://localhost:4321,http://localhost:5173,"
         "http://127.0.0.1:4321,http://127.0.0.1:5173,"

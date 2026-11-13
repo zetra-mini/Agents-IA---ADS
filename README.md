@@ -27,13 +27,13 @@ docker compose up --build -d
 
 Acesse:
 - Frontend Svelte: `http://localhost:5173`
-- API FastAPI (Swagger): `http://localhost:8000/docs`
+- API FastAPI (Swagger): `http://localhost:8010/docs`
 
 ## Como Rodar Localmente (Sem Docker)
 
 Backend:
 ```bash
-uv run --python 3.11 --with-requirements requirements.txt uvicorn main:app --host 127.0.0.1 --port 8000
+uv run --python 3.11 --with-requirements requirements.txt uvicorn main:app --host 127.0.0.1 --port 8010
 ```
 
 Frontend:
