@@ -2,59 +2,14 @@
   import { onMount } from 'svelte';
 
   let {
+    secao = 'oak_anuncios', // 'oak_brain' | 'oak_anuncios' | 'oak_reels' | 'oak_score' | 'oak_espiao' | 'oak_mcp' | 'oak_benchmarks'
     planoAssistido = $bindable(),
     onAplicarNaCampanha = () => {},
+    onIrParaSecao = () => {},
     onNotificar = () => {},
   } = $props();
 
-  let subTab = $state('geradores'); // 'brain' | 'geradores' | 'score_steal' | 'pipeboard_mcp' | 'benchmarks'
-  let showHamburgerModal = $state(false);
   let carregando = $state(false);
-
-  const MODULOS_OAK = [
-    {
-      id: 'geradores',
-      icone: '✍️',
-      curto: 'Geradores & Reels',
-      titulo: '18 Geradores & Wizard 10-Min',
-      desc: '3 variantes Meta Ads (Dor, Desejo, Prova Social), 6 roteiros de Reels (10 ganchos) e Kit WhatsApp + Google.',
-      badge: '18 Tools',
-    },
-    {
-      id: 'brain',
-      icone: '🧠',
-      curto: 'Cérebro da Marca',
-      titulo: 'Cérebro da Marca (Brand Brain & URL)',
-      desc: 'Auto-extrator de site por URL e 8 templates brasileiros prontos para calibrar toda a IA.',
-      badge: 'Auto-URL',
-    },
-    {
-      id: 'score_steal',
-      icone: '🎯',
-      curto: 'Score & Espionagem',
-      titulo: 'Creative Score (5 Alavancas) & Steal & Beat',
-      desc: 'Nota de 0 a 10 para seu anúncio + engenharia reversa para superar anúncios de concorrentes.',
-      badge: '11 Otimizadores',
-    },
-    {
-      id: 'pipeboard_mcp',
-      icone: '🔌',
-      curto: 'Pipeboard MCP',
-      titulo: 'Pipeboard Meta Ads MCP (Graph API)',
-      desc: 'Busca oficial de interesses (IDs reais), cidades/regiões e páginas via Meta Graph API.',
-      badge: '42 MCP Tools',
-    },
-    {
-      id: 'benchmarks',
-      icone: '📚',
-      curto: 'Benchmarks & Copy',
-      titulo: 'Benchmarks Brasil & Escola de Copy',
-      desc: 'Métricas de CTR/CPC/CPM/ROAS 2025/2026 no Brasil e frameworks PAS, AIDA, BAB, 4 U’s e Schwartz.',
-      badge: 'Guia PT-BR',
-    },
-  ];
-
-  let moduloAtivoInfo = $derived(MODULOS_OAK.find((m) => m.id === subTab) || MODULOS_OAK[0]);
 
   // Estado do Hub OpenAdKit + Pipeboard MCP
   let activeBrain = $state({
@@ -64,23 +19,17 @@
     service_area: 'Curitiba, Campo Largo',
     tone: 'Direto, confiável e transparente',
     usp: 'Simulação em 2 minutos pelo WhatsApp e veículos periciados com garantia',
-    audience_who: 'Homens e mulheres de 23 a 58 anos buscando trocar de carro ou financiamento',
-    audience_pain_points: ['Juros altos', 'Burocracia bancária'],
-    audience_desires: ['Sair de carro novo com parcela acessível', 'Simular rápido no WhatsApp'],
-    key_benefits: ['Aprovação rápida no WhatsApp', 'Estoque revisado com laudo'],
-    words_to_use: ['Simule no WhatsApp', 'Parcelas acessíveis', 'Laudo aprovado'],
   });
-  let brainsList = $state([]);
   let templates = $state([]);
   let benchmarks = $state([]);
   let frameworks = $state([]);
   let mcpTools = $state([]);
 
-  // Extrator de URL (Brand Brain)
+  // 1. Extrator de URL (Brand Brain)
   let urlExtracao = $state('');
   let extraindoUrl = $state(false);
 
-  // Inputs do Gerador Multiplataforma
+  // 2. Gerador de Anúncios & Reels
   let genId = $state('meta_ads_3_angulos');
   let genProduto = $state('Repasse de Financiamento e Seminovos Revisados');
   let genPromocao = $state('Simulação em 2 minutos pelo WhatsApp + 1ª parcela para 60 dias');
@@ -88,13 +37,13 @@
   let genCta = $state('Enviar mensagem');
   let resultadoGeracao = $state(null);
 
-  // Creative Score (5 Alavancas)
+  // 3. Creative Score (5 Alavancas)
   let scoreTexto = $state('');
   let scoreTitulo = $state('');
   let scoreCta = $state('Enviar mensagem');
   let resultadoScore = $state(null);
 
-  // Espionagem Steal & Beat
+  // 4. Espionagem Steal & Beat
   let concNome = $state('Concorrente Tradicional');
   let concAnuncio = $state(
     'Venha conferir nosso estoque de veículos com ótimas taxas de financiamento. Faça uma visita em nossa loja!'
@@ -102,7 +51,7 @@
   let concDiferencial = $state('Pré-aprovação em 2 minutos direto no WhatsApp e laudo cautelar 100% aprovado');
   let resultadoSteal = $state(null);
 
-  // Pipeboard Meta Ads MCP
+  // 5. Pipeboard Meta Ads MCP
   let buscaInteresseQuery = $state('Financiamento');
   let interessesEncontrados = $state([]);
   let buscaCidadeQuery = $state('Curitiba');
@@ -117,7 +66,6 @@
       if (res.ok) {
         const data = await res.json();
         if (data.active_brain) activeBrain = data.active_brain;
-        brainsList = data.brains || [];
         templates = data.templates || [];
         benchmarks = data.benchmarks || [];
         frameworks = data.frameworks_copy || [];
@@ -126,13 +74,12 @@
         genPromocao = activeBrain.usp || genPromocao;
         genCidades = activeBrain.service_area || genCidades;
       }
-      // Já dispara uma geração inicial e score inicial para a tela ficar rica imediatamente
-      await executarGerador();
       scoreTexto =
         planoAssistido?.anuncios?.[0]?.texto_principal ||
         'Procurando repasse de financiamento com parcelas acessíveis em Curitiba e Campo Largo? Simule em 2 minutos no WhatsApp!';
       scoreTitulo = planoAssistido?.anuncios?.[0]?.titulo || 'Repasse Facilitado Curitiba';
       await Promise.all([
+        executarGerador(),
         executarCreativeScore(),
         executarStealAndBeat(),
         buscarInteressesMcp(),
@@ -152,11 +99,10 @@
       if (res.ok) {
         const data = await res.json();
         activeBrain = data.active_brain;
-        brainsList = data.brains || [];
         genProduto = activeBrain.niche || '';
         genPromocao = activeBrain.usp || '';
         genCidades = activeBrain.service_area || 'Curitiba';
-        onNotificar(`Template "${activeBrain.business_name}" carregado no Cérebro da Marca!`);
+        onNotificar(`Perfil "${activeBrain.business_name}" ativado com sucesso!`);
         await executarGerador();
       }
     } finally {
@@ -166,7 +112,7 @@
 
   async function extrairMarcaDeUrl() {
     if (!urlExtracao.trim()) {
-      onNotificar('Digite a URL do site do cliente (ex: https://seusite.com.br).', 'error');
+      onNotificar('Digite a URL do site (ex: https://seusite.com.br).', 'error');
       return;
     }
     extraindoUrl = true;
@@ -182,7 +128,6 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Erro ao extrair URL.');
       activeBrain = data.active_brain;
-      brainsList = data.brains || [];
       genProduto = activeBrain.niche || '';
       genPromocao = activeBrain.usp || '';
       onNotificar(data.mensagem);
@@ -205,8 +150,7 @@
       if (res.ok) {
         const data = await res.json();
         activeBrain = data.active_brain;
-        brainsList = data.brains || [];
-        onNotificar('Cérebro da Marca salvo e sincronizado!');
+        onNotificar('Cérebro da Marca salvo com sucesso!');
       }
     } finally {
       carregando = false;
@@ -306,7 +250,7 @@
     });
     if (res.ok) {
       mcpToolOutput = await res.json();
-      onNotificar(`Ferramenta Pipeboard "${mcpToolSelecionada}" executada com sucesso!`);
+      onNotificar(`Ferramenta "${mcpToolSelecionada}" executada!`);
     }
   }
 
@@ -327,7 +271,7 @@
       planoAssistido.anuncios[0].cta = v.cta_button || v.cta || 'Enviar mensagem';
     }
     onAplicarNaCampanha();
-    onNotificar(`Variante "${v.label}" aplicada na Criação de Campanha Assistida!`);
+    onNotificar(`Copy "${v.label}" aplicada na Criação de Campanha Assistida!`);
   }
 
   function adicionarInteresseNaCampanha(nomeInteresse) {
@@ -352,528 +296,420 @@
   onMount(carregarHub);
 </script>
 
-<div class="oak-wrap">
-  <!-- BARRA SUPERIOR COMPACTA + BOTÃO DE MODAL HAMBÚRGUER (☰) -->
-  <div class="oak-compact-header">
-    <div class="oak-compact-left">
-      <button
-        type="button"
-        class="btn-hamburger-oak"
-        onclick={() => (showHamburgerModal = true)}
-        title="Abrir Catálogo Completo OpenAdKit & Pipeboard MCP"
-      >
-        <span class="ham-lines">☰</span>
-        <span>Menu & Ferramentas</span>
-        <span class="ham-count">5 Suítes</span>
-      </button>
-
-      <div class="oak-active-title">
-        <span class="oak-mod-icon">{moduloAtivoInfo.icone}</span>
-        <div>
-          <div class="oak-mod-name">
-            {moduloAtivoInfo.titulo}
-            <span class="oak-mini-badge">{moduloAtivoInfo.badge}</span>
-          </div>
-          <div class="oak-mod-sub">{moduloAtivoInfo.desc}</div>
-        </div>
+<div class="clean-section">
+  {#if secao === 'oak_brain'}
+    <!-- SEÇÃO DEDICADA 1: CÉREBRO DA MARCA (BRAND BRAIN) -->
+    <div class="sec-header">
+      <div>
+        <h1>🧠 Cérebro da Marca (Brand Brain)</h1>
+        <p>Configure os dados estratégicos da sua empresa ou extraia automaticamente pela URL do site.</p>
+      </div>
+      <div class="active-brand-tag">
+        Marca Ativa: <strong>{activeBrain.business_name}</strong>
       </div>
     </div>
 
-    <div class="oak-compact-right">
-      <!-- NAVEGAÇÃO RÁPIDA EM 1 LINHA -->
-      <div class="oak-inline-pills">
-        {#each MODULOS_OAK as m}
-          <button
-            type="button"
-            class:active={subTab === m.id}
-            onclick={() => (subTab = m.id)}
-            title={m.titulo}
-          >
-            <span>{m.icone}</span>
-            <span>{m.curto}</span>
+    <div class="clean-grid-2">
+      <section class="clean-card">
+        <h2>🌐 Auto-Extrator pela URL do Site</h2>
+        <p class="card-desc">
+          Informe o site ou landing page da empresa para preencher automaticamente posicionamento, oferta e público.
+        </p>
+        <div class="inline-search">
+          <input
+            type="text"
+            placeholder="Ex: https://seusite.com.br"
+            bind:value={urlExtracao}
+          />
+          <button type="button" class="btn-primary" onclick={extrairMarcaDeUrl} disabled={extraindoUrl}>
+            {extraindoUrl ? 'Extraindo...' : '⚡ Extrair Site'}
           </button>
-        {/each}
-      </div>
-
-      <button
-        type="button"
-        class="brand-compact-btn"
-        onclick={() => (subTab = 'brain')}
-        title="Clique para trocar ou editar o Cérebro da Marca"
-      >
-        <span>🧠</span>
-        <span class="brand-compact-name">{activeBrain.business_name}</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- MODAL HAMBÚRGUER: CENTRAL OPENADKIT v1.1 PT-BR & PIPEBOARD META ADS MCP -->
-  {#if showHamburgerModal}
-    <div class="oak-modal-backdrop" role="presentation" onclick={() => (showHamburgerModal = false)}>
-      <div class="oak-modal-drawer" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && (showHamburgerModal = false)}>
-        <div class="oak-modal-head">
-          <div>
-            <div class="oak-badges">
-              <span class="badge-pill gold">🧰 OpenAdKit v1.1 PT-BR</span>
-              <span class="badge-pill blue">🔌 Pipeboard Meta Ads MCP (42 Tools)</span>
-              <span class="badge-pill green">100% Português do Brasil</span>
-            </div>
-            <h3>Central OpenAdKit & Pipeboard Meta Ads MCP</h3>
-            <p>
-              18 Geradores de Anúncios · 11 Otimizadores · Cérebro da Marca (Brand Brain) · Creative Score 5 Alavancas · Espionagem Steal & Beat · Segmentação Oficial da Meta Graph API.
-            </p>
-          </div>
-          <button type="button" class="oak-modal-close" onclick={() => (showHamburgerModal = false)}>✕</button>
         </div>
 
-        <div class="oak-modal-section-title">Selecione a Ferramenta / Módulo</div>
-        <div class="oak-modal-grid">
-          {#each MODULOS_OAK as m}
-            <button
-              type="button"
-              class="oak-modal-item"
-              class:selected={subTab === m.id}
-              onclick={() => {
-                subTab = m.id;
-                showHamburgerModal = false;
-              }}
-            >
-              <div class="oak-mi-top">
-                <span class="oak-mi-icon">{m.icone}</span>
-                <strong>{m.titulo}</strong>
-                <span class="oak-mi-badge">{m.badge}</span>
+        <div class="divider"></div>
+
+        <h2>📝 Dados do Perfil Ativo</h2>
+        <div class="form-stack">
+          <div class="field-row">
+            <label for="bb-name">Nome da Empresa</label>
+            <input id="bb-name" type="text" bind:value={activeBrain.business_name} />
+          </div>
+          <div class="field-row">
+            <label for="bb-area">Cidades / Região de Atendimento</label>
+            <input id="bb-area" type="text" bind:value={activeBrain.service_area} />
+          </div>
+          <div class="field-row">
+            <label for="bb-niche">Nicho & Produto Principal</label>
+            <input id="bb-niche" type="text" bind:value={activeBrain.niche} />
+          </div>
+          <div class="field-row">
+            <label for="bb-usp">Diferencial Único (USP / Oferta)</label>
+            <input id="bb-usp" type="text" bind:value={activeBrain.usp} />
+          </div>
+          <button type="button" class="btn-primary" onclick={salvarBrainAtual}>
+            💾 Salvar Cérebro da Marca
+          </button>
+        </div>
+      </section>
+
+      <section class="clean-card">
+        <h2>⚡ Templates de Nicho Prontos (Brasil)</h2>
+        <p class="card-desc">Clique em um modelo para carregar todas as configurações do setor em 1 clique.</p>
+        <div class="tpl-list">
+          {#each templates as tpl}
+            <div class="tpl-row">
+              <div>
+                <strong>{tpl.emoji} {tpl.nome}</strong>
+                <p>{tpl.descricao}</p>
               </div>
-              <p>{m.desc}</p>
-            </button>
+              <button type="button" class="btn-ghost-sm" onclick={() => aplicarTemplateIndustria(tpl.slug)}>
+                Usar Modelo
+              </button>
+            </div>
           {/each}
         </div>
+      </section>
+    </div>
 
-        <div class="oak-modal-brand-bar">
-          <div>
-            <span>🧠 Marca Ativa no Cérebro:</span>
-            <strong>{activeBrain.business_name}</strong>
-            <small>({activeBrain.service_area || 'Brasil'})</small>
-          </div>
-          <div class="oak-modal-tpl-chips">
-            {#each templates.slice(0, 4) as tpl}
-              <button
-                type="button"
-                class="tpl-quick-chip"
-                onclick={() => {
-                  aplicarTemplateIndustria(tpl.slug);
-                  showHamburgerModal = false;
-                }}
-              >
-                {tpl.emoji} {tpl.nome}
-              </button>
-            {/each}
-          </div>
+  {:else if secao === 'oak_anuncios'}
+    <!-- SEÇÃO DEDICADA 2: GERADOR DE ANÚNCIOS META ADS (3 ÂNGULOS) -->
+    <div class="sec-header">
+      <div>
+        <h1>✍️ Gerador de Copy Meta Ads (3 Ângulos)</h1>
+        <p>Gere 3 variantes prontas (Dor/PAS, Desejo/BAB e Prova Social/AIDA) dentro do limite mobile da Meta.</p>
+      </div>
+      <button type="button" class="btn-ghost-sm" onclick={() => onIrParaSecao('oak_brain')}>
+        🧠 Marca: <strong>{activeBrain.business_name}</strong> (Trocar)
+      </button>
+    </div>
+
+    <section class="clean-card">
+      <div class="form-row-4">
+        <div class="field-row">
+          <label for="oak-gen-prod">Produto / Oferta Principal</label>
+          <input id="oak-gen-prod" type="text" bind:value={genProduto} />
+        </div>
+        <div class="field-row">
+          <label for="oak-gen-usp">Diferencial / Promoção</label>
+          <input id="oak-gen-usp" type="text" bind:value={genPromocao} />
+        </div>
+        <div class="field-row">
+          <label for="oak-gen-cid">Cidades Alvo</label>
+          <input id="oak-gen-cid" type="text" bind:value={genCidades} />
+        </div>
+        <div class="field-row">
+          <label for="oak-gen-cta">Botão CTA</label>
+          <select id="oak-gen-cta" bind:value={genCta}>
+            <option value="Enviar mensagem">Enviar mensagem (WhatsApp)</option>
+            <option value="Saiba mais">Saiba mais</option>
+            <option value="Cadastre-se">Cadastre-se</option>
+            <option value="Solicitar agora">Solicitar agora</option>
+          </select>
         </div>
       </div>
-    </div>
-  {/if}
+      <div class="form-actions-bar">
+        <span class="rule-hint">📏 Limite Mobile aplicado: Título ≤ 27 caracteres · Acima da dobra ≤ 125 caracteres</span>
+        <button type="button" class="btn-primary" onclick={executarGerador} disabled={carregando}>
+          {carregando ? '⏳ Gerando...' : '🚀 Gerar 3 Variantes de Anúncio'}
+        </button>
+      </div>
+    </section>
 
-  {#if subTab === 'geradores'}
-    <!-- ABA 1: 18 GERADORES DE ANÚNCIOS, REELS (10 HOOKS) & WIZARD 10 MINUTOS -->
-    <div class="oak-grid-2">
-      <section class="oak-card">
-        <h2>⚡ Configurar Geração de Alta Conversão</h2>
-        <div class="oak-form">
-          <div class="f-row">
-            <label for="oak-gen-prod">Produto / Oferta Principal</label>
-            <input id="oak-gen-prod" type="text" bind:value={genProduto} />
-          </div>
-          <div class="f-row">
-            <label for="oak-gen-usp">Diferencial / Promoção (USP)</label>
-            <input id="oak-gen-usp" type="text" bind:value={genPromocao} />
-          </div>
-          <div class="f-grid-2">
-            <div class="f-row">
-              <label for="oak-gen-cid">Cidades / Região Alvo</label>
-              <input id="oak-gen-cid" type="text" bind:value={genCidades} />
+    {#if resultadoGeracao}
+      <div class="cards-grid-3">
+        {#each resultadoGeracao.variantes_meta as v}
+          <div class="clean-card variant-item">
+            <div class="item-top">
+              <span class="badge-blue">{v.label}</span>
+              <span class="muted-label">{v.angulo}</span>
             </div>
-            <div class="f-row">
-              <label for="oak-gen-cta">Botão CTA</label>
-              <select id="oak-gen-cta" bind:value={genCta}>
-                <option value="Enviar mensagem">Enviar mensagem (WhatsApp)</option>
-                <option value="Saiba mais">Saiba mais</option>
-                <option value="Cadastre-se">Cadastre-se</option>
-                <option value="Solicitar agora">Solicitar agora</option>
-              </select>
+            <p class="copy-body">{v.primary_text}</p>
+            <div class="meta-summary">
+              <div><strong>Título ({v.char_counts.headline}/27):</strong> {v.headline}</div>
+              <div><strong>Descrição ({v.char_counts.description}/27):</strong> {v.description}</div>
+              <div><strong>CTA:</strong> {v.cta_button} · <span class="text-green">{v.status_validacao}</span></div>
             </div>
+            <button type="button" class="btn-apply" onclick={() => usarVarianteNaCampanha(v)}>
+              🪄 Usar na Criação Assistida
+            </button>
           </div>
-          <button type="button" class="btn-oak-primary" onclick={executarGerador} disabled={carregando}>
-            {carregando ? '⏳ Gerando 3 Variantes + Reels + Kit...' : '🚀 Gerar 3 Variantes Meta Ads + 6 Roteiros Reels + Kit 10-Min'}
-          </button>
-        </div>
-      </section>
+        {/each}
+      </div>
+    {/if}
 
-      <section class="oak-card">
-        <h2>📌 Regras Oficiais Meta Ads (OpenAdKit Enforcer)</h2>
-        <div class="limits-list">
-          <div class="limit-item">
-            <span>Texto Principal (Acima da Dobra)</span>
-            <strong>Máx. 125 caracteres sem truncar ("...ver mais")</strong>
-          </div>
-          <div class="limit-item">
-            <span>Título Mobile (Headline)</span>
-            <strong>Máx. 27 caracteres no celular (40 no desktop)</strong>
-          </div>
-          <div class="limit-item">
-            <span>Descrição do Link</span>
-            <strong>Máx. 27 caracteres</strong>
-          </div>
-          <div class="limit-item">
-            <span>Gancho de Vídeo (Reels / Stories)</span>
-            <strong>Primeiros 3 segundos com quebra de padrão visual + texto em tela</strong>
-          </div>
-        </div>
-      </section>
+  {:else if secao === 'oak_reels'}
+    <!-- SEÇÃO DEDICADA 3: ROTEIROS DE REELS, TIKTOK & SHORTS + SEQUÊNCIA WHATSAPP -->
+    <div class="sec-header">
+      <div>
+        <h1>🎬 Roteiros de Reels & Funil WhatsApp</h1>
+        <p>6 roteiros de vídeo curto com ganchos de 3 segundos validados + sequência de fechamento no WhatsApp.</p>
+      </div>
+      <button type="button" class="btn-primary" onclick={executarGerador} disabled={carregando}>
+        🔄 Atualizar Roteiros para {activeBrain.business_name}
+      </button>
     </div>
 
     {#if resultadoGeracao}
-      <!-- 3 VARIANTES META ADS (DOR, DESEJO, PROVA SOCIAL) -->
-      <section class="oak-card">
-        <div class="card-head-flex">
-          <h2>📱 3 Variantes Meta Ads (Facebook + Instagram) — Prontas para Publicar</h2>
-          <span class="sub-pill">{resultadoGeracao.recomendacao_publico}</span>
-        </div>
-
-        <div class="variants-grid">
-          {#each resultadoGeracao.variantes_meta as v}
-            <div class="variant-card">
-              <div class="var-top">
-                <span class="var-badge">{v.label}</span>
-                <span class="var-angle">{v.angulo}</span>
-              </div>
-              <p class="var-copy">{v.primary_text}</p>
-              <div class="var-meta-box">
-                <div><strong>Título ({v.char_counts.headline}/27):</strong> {v.headline}</div>
-                <div><strong>Descrição ({v.char_counts.description}/27):</strong> {v.description}</div>
-                <div><strong>CTA:</strong> {v.cta_button} · <span class="ok-green">{v.status_validacao}</span></div>
-              </div>
-              <button type="button" class="btn-apply-var" onclick={() => usarVarianteNaCampanha(v)}>
-                🪄 Aplicar {v.label} na Criação Assistida
+      <div class="cards-grid-3">
+        {#each resultadoGeracao.ideias_reels as r}
+          <div class="clean-card variant-item">
+            <div class="item-top">
+              <span class="badge-purple">Reels #{r.id} · {r.duracao_segundos}s</span>
+              <span class="muted-label">{r.hook_formula}</span>
+            </div>
+            <div class="script-block">🎤 <strong>Gancho (0–3s):</strong> "{r.hook_0_3s}"</div>
+            <div class="script-block">🎥 <strong>Cena Visual:</strong> {r.visual_brief}</div>
+            <div class="script-block">📝 <strong>Locução:</strong> {r.script_locucao}</div>
+            <div class="item-foot">
+              <span>⏰ {r.melhor_horario}</span>
+              <button
+                type="button"
+                class="btn-ghost-sm"
+                onclick={() =>
+                  usarVarianteNaCampanha({
+                    label: `Reels #${r.id}`,
+                    primary_text: `${r.hook_0_3s}\n\n${r.script_locucao}`,
+                    headline: r.cta.slice(0, 27),
+                    description: 'Assista e chame no WhatsApp',
+                    cta_button: genCta,
+                  })}
+              >
+                🪄 Usar na Campanha
               </button>
             </div>
-          {/each}
-        </div>
-      </section>
+          </div>
+        {/each}
+      </div>
 
-      <!-- 6 IDEIAS DE REELS / TIKTOK / SHORTS COM AS 10 FÓRMULAS DE GANCHO -->
-      <section class="oak-card">
-        <h2>🎬 Gerador de Ideias de Reels & TikTok (10 Fórmulas de Gancho Validado)</h2>
-        <div class="reels-grid">
-          {#each resultadoGeracao.ideias_reels as r}
-            <div class="reel-card">
-              <div class="var-top">
-                <span class="var-badge purple">Reels #{r.id} · {r.duracao_segundos}s</span>
-                <span class="var-angle">{r.hook_formula}</span>
-              </div>
-              <div class="reel-hook">🎤 <strong>Gancho (0–3s):</strong> "{r.hook_0_3s}"</div>
-              <div class="reel-brief">🎥 <strong>Cena / B-Roll:</strong> {r.visual_brief}</div>
-              <div class="reel-script">📝 <strong>Locução:</strong> {r.script_locucao}</div>
-              <div class="reel-foot">
-                <span>⏰ {r.melhor_horario}</span>
-                <button
-                  type="button"
-                  class="btn-mini-apply"
-                  onclick={() =>
-                    usarVarianteNaCampanha({
-                      label: `Reels #${r.id}`,
-                      primary_text: `${r.hook_0_3s}\n\n${r.script_locucao}`,
-                      headline: r.cta.slice(0, 27),
-                      description: 'Assista e chame no WhatsApp',
-                      cta_button: genCta,
-                    })}
-                >
-                  🪄 Usar Roteiro no Anúncio
-                </button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </section>
-
-      <!-- WIZARD DE LANÇAMENTO EM 10 MINUTOS (WHATSAPP + GOOGLE RSA + CALENDÁRIO 7D) -->
-      <div class="oak-grid-2">
-        <section class="oak-card">
-          <h2>💬 Sequência de 3 Mensagens de Fechamento no WhatsApp</h2>
+      <section class="clean-card">
+        <h2>💬 Sequência de 3 Mensagens para Fechamento no WhatsApp</h2>
+        <div class="cards-grid-3">
           {#each resultadoGeracao.kit_lancamento.sequencia_whatsapp_3_etapas as zap}
-            <div class="zap-step">
+            <div class="sub-box">
               <strong>{zap.etapa}</strong>
               <p>{zap.texto}</p>
             </div>
           {/each}
-        </section>
+        </div>
+      </section>
+    {/if}
 
-        <section class="oak-card">
-          <h2>📅 Calendário Editorial de 7 Dias + Google Search RSA</h2>
-          <div class="cal-list">
-            {#each resultadoGeracao.kit_lancamento.calendario_7_dias as d}
-              <div class="cal-row">
-                <span class="cal-day">{d.dia}</span>
-                <span class="cal-fmt">{d.formato}</span>
-                <span class="cal-theme">{d.tema}</span>
+  {:else if secao === 'oak_score'}
+    <!-- SEÇÃO DEDICADA 4: AVALIADOR CREATIVE SCORE (5 ALAVANCAS) -->
+    <div class="sec-header">
+      <div>
+        <h1>🎯 Avaliador de Criativo (Creative Score — 5 Alavancas)</h1>
+        <p>Auditoria de 0 a 10 para prever o CTR e corrigir pontos fracos antes de gastar orçamento.</p>
+      </div>
+    </div>
+
+    <div class="clean-grid-2">
+      <section class="clean-card">
+        <h2>📝 Texto do Anúncio para Avaliar</h2>
+        <div class="form-stack">
+          <div class="field-row">
+            <label for="sc-txt">Texto Principal (Copy)</label>
+            <textarea id="sc-txt" rows="5" bind:value={scoreTexto}></textarea>
+          </div>
+          <div class="field-row">
+            <label for="sc-tit">Título Mobile (Headline ≤ 27 caracteres)</label>
+            <input id="sc-tit" type="text" bind:value={scoreTitulo} />
+          </div>
+          <button type="button" class="btn-primary" onclick={executarCreativeScore}>
+            🎯 Calcular Nota (0 a 10) & Gerar Correções
+          </button>
+        </div>
+      </section>
+
+      {#if resultadoScore}
+        <section class="clean-card">
+          <div class="score-banner">
+            <div class="score-circle">{resultadoScore.overall_score}<span>/10</span></div>
+            <div>
+              <div class="score-verdict">{resultadoScore.tier_label}</div>
+              <div class="card-desc">CTR Estimado: <strong>{resultadoScore.predicted_ctr_band}</strong></div>
+            </div>
+          </div>
+
+          <div class="levers-stack">
+            {#each Object.values(resultadoScore.scores) as lev}
+              <div class="lever-line">
+                <div class="lever-top">
+                  <strong>{lev.label}</strong>
+                  <span class="badge-blue">{lev.score}/10</span>
+                </div>
+                <div class="card-desc">{lev.reason}</div>
               </div>
             {/each}
           </div>
-        </section>
-      </div>
-    {/if}
 
-  {:else if subTab === 'brain'}
-    <!-- ABA 2: CÉREBRO DA MARCA (BRAND BRAIN) + EXTRATOR DE URL + 8 TEMPLATES -->
-    <section class="oak-card">
-      <h2>🌐 Extrair Cérebro da Marca Automaticamente pela URL do Site</h2>
-      <p class="muted-sub">
-        Cole o site do seu negócio ou cliente: o OpenAdKit lê o título, meta tags, oferta e constrói o perfil estratégico em português.
-      </p>
-      <div class="url-extract-bar">
-        <input
-          type="text"
-          placeholder="Ex: https://panificadorabompao.com.br ou https://autoprimecuritiba.com.br"
-          bind:value={urlExtracao}
-        />
-        <button type="button" class="btn-oak-primary" onclick={extrairMarcaDeUrl} disabled={extraindoUrl}>
-          {extraindoUrl ? '⏳ Extraindo Marca...' : '⚡ Extrair Cérebro da Marca pela URL'}
-        </button>
+          <div class="divider"></div>
+          <h3>🔧 3 Ajustes Recomendados:</h3>
+          {#each resultadoScore.top_3_fixes as fix}
+            <div class="fix-box">
+              <div><strong>{fix.alavanca}:</strong> <span class="text-green">{fix.ganho_esperado}</span></div>
+              <div class="card-desc">➡️ "{fix.substituir_por}"</div>
+            </div>
+          {/each}
+
+          <button
+            type="button"
+            class="btn-apply"
+            onclick={() =>
+              usarVarianteNaCampanha({
+                label: 'Copy Otimizada (Creative Score)',
+                primary_text: resultadoScore.copy_otimizada_pronta.texto_principal,
+                headline: resultadoScore.copy_otimizada_pronta.titulo,
+                description: 'Simule em 2 min no WhatsApp',
+                cta_button: resultadoScore.copy_otimizada_pronta.cta,
+              })}
+          >
+            ✨ Aplicar Copy Otimizada na Criação Assistida
+          </button>
+        </section>
+      {/if}
+    </div>
+
+  {:else if secao === 'oak_espiao'}
+    <!-- SEÇÃO DEDICADA 5: ESPIONAGEM DE CONCORRENTES (STEAL & BEAT) -->
+    <div class="sec-header">
+      <div>
+        <h1>🕵️ Espionagem de Concorrentes (Steal & Beat)</h1>
+        <p>Analise o anúncio de qualquer concorrente, identifique o ponto cego e gere 3 anúncios superiores.</p>
+      </div>
+      {#if resultadoSteal?.bibliotecas_oficiais}
+        <div class="ext-links">
+          {#each resultadoSteal.bibliotecas_oficiais as lib}
+            <a href={lib.url} target="_blank" rel="noopener noreferrer" class="btn-ghost-sm">
+              🔎 {lib.nome} ↗
+            </a>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <section class="clean-card">
+      <div class="clean-grid-2">
+        <div class="field-row">
+          <label for="st-conc">Texto do Anúncio do Concorrente (Cole da Biblioteca de Anúncios)</label>
+          <textarea id="st-conc" rows="3" bind:value={concAnuncio}></textarea>
+        </div>
+        <div class="form-stack">
+          <div class="field-row">
+            <label for="st-usp">Nosso Diferencial para Superar o Concorrente</label>
+            <input id="st-usp" type="text" bind:value={concDiferencial} />
+          </div>
+          <button type="button" class="btn-primary" onclick={executarStealAndBeat}>
+            🕵️ Desmontar Concorrente & Gerar 3 Variantes Superiores
+          </button>
+        </div>
       </div>
     </section>
 
-    <section class="oak-card">
-      <h2>⚡ Ou Escolha um Template de Nicho Pronto (100% Português-BR)</h2>
-      <div class="tpl-grid">
-        {#each templates as tpl}
-          <div class="tpl-card">
-            <div class="tpl-top">
-              <span class="tpl-emoji">{tpl.emoji}</span>
-              <strong>{tpl.nome}</strong>
+    {#if resultadoSteal}
+      <section class="clean-card">
+        <div class="clean-grid-2">
+          <div class="sub-box">
+            <strong>⚠️ Ponto Fraco Detectado no Concorrente</strong>
+            <p>{resultadoSteal.teardown.ponto_fraco_exploravel}</p>
+          </div>
+          <div class="sub-box">
+            <strong>🚀 Nosso Plano de Ataque</strong>
+            <p>{resultadoSteal.plano_ataque.angulo_para_dominar}</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="cards-grid-3">
+        {#each resultadoSteal.beat_variants as bv}
+          <div class="clean-card variant-item">
+            <div class="item-top">
+              <span class="badge-blue">{bv.label}</span>
+              <span class="text-green">{bv.estrategia}</span>
             </div>
-            <p>{tpl.descricao}</p>
-            <button type="button" class="btn-apply-var" onclick={() => aplicarTemplateIndustria(tpl.slug)}>
-              ✅ Ativar Este Perfil de Marca
+            <p class="copy-body">{bv.primary_text}</p>
+            <div class="card-desc">💡 <strong>Por que vence:</strong> {bv.por_que_vence}</div>
+            <button
+              type="button"
+              class="btn-apply"
+              onclick={() =>
+                usarVarianteNaCampanha({
+                  label: bv.label,
+                  primary_text: bv.primary_text,
+                  headline: bv.headline,
+                  description: 'Atendimento em 2 min',
+                  cta_button: bv.cta,
+                })}
+            >
+              🪄 Usar na Criação Assistida
             </button>
           </div>
         {/each}
       </div>
-    </section>
+    {/if}
 
-    <section class="oak-card">
-      <h2>🧠 Perfil Estratégico Ativo: {activeBrain.business_name}</h2>
-      <div class="f-grid-2">
-        <div class="f-row">
-          <label for="bb-name">Nome da Empresa</label>
-          <input id="bb-name" type="text" bind:value={activeBrain.business_name} />
-        </div>
-        <div class="f-row">
-          <label for="bb-area">Área de Atendimento (Cidades)</label>
-          <input id="bb-area" type="text" bind:value={activeBrain.service_area} />
-        </div>
-        <div class="f-row">
-          <label for="bb-niche">Nicho & Posicionamento</label>
-          <input id="bb-niche" type="text" bind:value={activeBrain.niche} />
-        </div>
-        <div class="f-row">
-          <label for="bb-usp">Proposta Única de Valor (USP)</label>
-          <input id="bb-usp" type="text" bind:value={activeBrain.usp} />
-        </div>
+  {:else if secao === 'oak_mcp'}
+    <!-- SEÇÃO DEDICADA 6: PIPEBOARD META ADS MCP (INTERESSES & CIDADES GRAPH API) -->
+    <div class="sec-header">
+      <div>
+        <h1>🔌 Segmentação Oficial Meta Graph API (Pipeboard MCP)</h1>
+        <p>Consulte interesses oficiais (IDs reais) e cidades diretamente na API da Meta e adicione à sua campanha.</p>
       </div>
-      <div class="wiz-actions-row">
-        <button type="button" class="btn-oak-primary" onclick={salvarBrainAtual}>
-          💾 Salvar Cérebro da Marca
-        </button>
-      </div>
-    </section>
-
-  {:else if subTab === 'score_steal'}
-    <!-- ABA 3: CREATIVE SCORE (5 ALAVANCAS) & ESPIONAGEM STEAL & BEAT -->
-    <div class="oak-grid-2">
-      <!-- CREATIVE SCORE -->
-      <section class="oak-card">
-        <h2>🎯 Avaliador Brutal de Criativo (Creative Score — 5 Alavancas)</h2>
-        <div class="oak-form">
-          <div class="f-row">
-            <label for="sc-txt">Texto Principal do Anúncio</label>
-            <textarea id="sc-txt" rows="3" bind:value={scoreTexto}></textarea>
-          </div>
-          <div class="f-row">
-            <label for="sc-tit">Título (Headline Mobile ≤27 chars)</label>
-            <input id="sc-tit" type="text" bind:value={scoreTitulo} />
-          </div>
-          <button type="button" class="btn-oak-primary" onclick={executarCreativeScore}>
-            🎯 Calcular Nota do Anúncio (0 a 10) + 3 Correções
-          </button>
-        </div>
-
-        {#if resultadoScore}
-          <div class="score-result-box">
-            <div class="score-header">
-              <div class="big-score">{resultadoScore.overall_score}<span>/10</span></div>
-              <div>
-                <div class="tier-verdict">{resultadoScore.tier_label}</div>
-                <div class="ctr-pred">CTR Estimado: <strong>{resultadoScore.predicted_ctr_band}</strong></div>
-              </div>
-            </div>
-
-            <div class="levers-list">
-              {#each Object.values(resultadoScore.scores) as lev}
-                <div class="lever-row">
-                  <div class="lever-head">
-                    <strong>{lev.label}</strong>
-                    <span class="lever-num">{lev.score}/10</span>
-                  </div>
-                  <div class="lever-reason">{lev.reason}</div>
-                </div>
-              {/each}
-            </div>
-
-            <h3 class="fixes-title">🔧 3 Correções Exatas Recomendadas pela IA:</h3>
-            {#each resultadoScore.top_3_fixes as fix}
-              <div class="fix-item">
-                <div><strong>{fix.alavanca}:</strong> <span class="gain-tag">{fix.ganho_esperado}</span></div>
-                <div class="fix-replace">➡️ <em>"{fix.substituir_por}"</em></div>
-              </div>
-            {/each}
-
-            <button
-              type="button"
-              class="btn-apply-var"
-              onclick={() =>
-                usarVarianteNaCampanha({
-                  label: 'Copy Otimizada (Creative Score)',
-                  primary_text: resultadoScore.copy_otimizada_pronta.texto_principal,
-                  headline: resultadoScore.copy_otimizada_pronta.titulo,
-                  description: 'Simule em 2 min no WhatsApp',
-                  cta_button: resultadoScore.copy_otimizada_pronta.cta,
-                })}
-            >
-              ✨ Aplicar Copy Otimizada na Campanha Assistida
-            </button>
-          </div>
-        {/if}
-      </section>
-
-      <!-- ESPIONAGEM STEAL & BEAT -->
-      <section class="oak-card">
-        <h2>🕵️ Espionagem Competitiva: "Roube a Estrutura e Supere" (Steal & Beat)</h2>
-        {#if resultadoSteal?.bibliotecas_oficiais}
-          <div class="lib-links">
-            {#each resultadoSteal.bibliotecas_oficiais as lib}
-              <a href={lib.url} target="_blank" rel="noopener noreferrer" class="lib-chip">
-                🔎 {lib.nome} ↗
-              </a>
-            {/each}
-          </div>
-        {/if}
-
-        <div class="oak-form">
-          <div class="f-row">
-            <label for="st-conc">Texto do Anúncio do Concorrente (Cole da Biblioteca da Meta)</label>
-            <textarea id="st-conc" rows="3" bind:value={concAnuncio}></textarea>
-          </div>
-          <div class="f-row">
-            <label for="st-usp">Nosso Diferencial para Superar</label>
-            <input id="st-usp" type="text" bind:value={concDiferencial} />
-          </div>
-          <button type="button" class="btn-oak-primary" onclick={executarStealAndBeat}>
-            🕵️ Desmontar Concorrente & Gerar 3 Anúncios Superiores
-          </button>
-        </div>
-
-        {#if resultadoSteal}
-          <div class="teardown-box">
-            <div><strong>Ponto Fraco Detectado no Concorrente:</strong> {resultadoSteal.teardown.ponto_fraco_exploravel}</div>
-            <div><strong>Nosso Plano de Ataque:</strong> {resultadoSteal.plano_ataque.angulo_para_dominar}</div>
-          </div>
-
-          {#each resultadoSteal.beat_variants as bv}
-            <div class="beat-card">
-              <div class="var-top">
-                <strong>{bv.label}</strong>
-                <span class="gain-tag">{bv.estrategia}</span>
-              </div>
-              <p class="var-copy">{bv.primary_text}</p>
-              <div class="why-wins">💡 <strong>Por que vence:</strong> {bv.por_que_vence}</div>
-              <button
-                type="button"
-                class="btn-mini-apply"
-                onclick={() =>
-                  usarVarianteNaCampanha({
-                    label: bv.label,
-                    primary_text: bv.primary_text,
-                    headline: bv.headline,
-                    description: 'Atendimento em 2 min',
-                    cta_button: bv.cta,
-                  })}
-              >
-                🪄 Usar Este Anúncio na Campanha Assistida
-              </button>
-            </div>
-          {/each}
-        {/if}
-      </section>
     </div>
 
-  {:else if subTab === 'pipeboard_mcp'}
-    <!-- ABA 4: PIPEBOARD META ADS MCP (SEGMENTAÇÃO OFICIAL & EXECUTOR GRAPH API) -->
-    <div class="oak-grid-2">
-      <!-- BUSCADOR DE INTERESSES OFICIAIS DA META (adinterest) -->
-      <section class="oak-card">
-        <h2>🎯 Buscar Interesses Oficiais na Meta Graph API (Pipeboard MCP)</h2>
-        <div class="url-extract-bar">
+    <div class="clean-grid-2">
+      <section class="clean-card">
+        <h2>🎯 Buscar Interesses Oficiais (`adinterest`)</h2>
+        <div class="inline-search">
           <input
             type="text"
-            placeholder="Ex: Financiamento, Carros, Pizza, Imóveis..."
+            placeholder="Ex: Financiamento, Veículos, Pizzaria..."
             bind:value={buscaInteresseQuery}
           />
-          <button type="button" class="btn-oak-primary" onclick={buscarInteressesMcp}>
-            🔍 Buscar Interesses
+          <button type="button" class="btn-primary" onclick={buscarInteressesMcp}>
+            🔍 Buscar
           </button>
         </div>
 
-        <div class="mcp-results-list">
+        <div class="result-list">
           {#each interessesEncontrados as it}
-            <div class="mcp-item-row">
+            <div class="result-row">
               <div>
                 <strong>{it.name}</strong>
-                <div class="mcp-sub">
-                  ID: <code>{it.id}</code> · Público: {(it.audience_size_lower_bound || 50000).toLocaleString('pt-BR')} a {(it.audience_size_upper_bound || 500000).toLocaleString('pt-BR')} pessoas · <span class="src-tag">{it.fonte}</span>
+                <div class="card-desc">
+                  ID: <code>{it.id}</code> · Audiência: {(it.audience_size_lower_bound || 50000).toLocaleString('pt-BR')}–{(it.audience_size_upper_bound || 500000).toLocaleString('pt-BR')}
                 </div>
               </div>
-              <button type="button" class="btn-mini-apply" onclick={() => adicionarInteresseNaCampanha(it.name)}>
-                ➕ Adicionar na Campanha
+              <button type="button" class="btn-ghost-sm" onclick={() => adicionarInteresseNaCampanha(it.name)}>
+                ➕ Adicionar
               </button>
             </div>
           {/each}
         </div>
       </section>
 
-      <!-- BUSCADOR DE CIDADES E REGIÕES OFICIAIS DA META (adgeolocation) -->
-      <section class="oak-card">
-        <h2>📍 Buscar Cidades e Regiões Oficiais da Meta (`adgeolocation`)</h2>
-        <div class="url-extract-bar">
+      <section class="clean-card">
+        <h2>📍 Buscar Cidades e Regiões (`adgeolocation`)</h2>
+        <div class="inline-search">
           <input
             type="text"
-            placeholder="Ex: Curitiba, Campo Largo, São José dos Pinhais..."
+            placeholder="Ex: Curitiba, Campo Largo..."
             bind:value={buscaCidadeQuery}
           />
-          <button type="button" class="btn-oak-primary" onclick={buscarCidadesMcp}>
-            📍 Buscar Cidades
+          <button type="button" class="btn-primary" onclick={buscarCidadesMcp}>
+            📍 Buscar
           </button>
         </div>
 
-        <div class="mcp-results-list">
+        <div class="result-list">
           {#each cidadesEncontradas as cid}
-            <div class="mcp-item-row">
+            <div class="result-row">
               <div>
                 <strong>{cid.name} ({cid.region})</strong>
-                <div class="mcp-sub">
-                  Key Oficial Meta: <code>{cid.key}</code> · Tipo: {cid.type} · <span class="src-tag">{cid.fonte}</span>
-                </div>
+                <div class="card-desc">Key Meta: <code>{cid.key}</code> · Tipo: {cid.type}</div>
               </div>
-              <button type="button" class="btn-mini-apply" onclick={() => adicionarCidadeNaCampanha(cid.name)}>
-                ➕ Adicionar Cidade
+              <button type="button" class="btn-ghost-sm" onclick={() => adicionarCidadeNaCampanha(cid.name)}>
+                ➕ Adicionar
               </button>
             </div>
           {/each}
@@ -881,39 +717,44 @@
       </section>
     </div>
 
-    <!-- EXECUTOR INTERATIVO DE TODAS AS FERRAMENTAS PIPEBOARD META ADS MCP -->
-    <section class="oak-card">
-      <h2>🔌 Console de Ferramentas Pipeboard Meta Ads MCP (`co.pipeboard/meta-ads-mcp`)</h2>
-      <div class="mcp-console-bar">
+    <section class="clean-card">
+      <h2>🛠️ Executor Direto de Ferramentas Pipeboard MCP</h2>
+      <div class="inline-search">
         <select bind:value={mcpToolSelecionada}>
           {#each mcpTools as t}
             <option value={t.id}>{t.categoria} — {t.nome}</option>
           {/each}
         </select>
-        <input type="text" placeholder="Parâmetro opcional (ex: Curitiba, Financiamento)..." bind:value={mcpToolQuery} />
-        <button type="button" class="btn-oak-primary" onclick={rodarFerramentaMcpDireta}>
-          ▶️ Executar Ferramenta MCP
+        <input type="text" placeholder="Parâmetro opcional..." bind:value={mcpToolQuery} />
+        <button type="button" class="btn-primary" onclick={rodarFerramentaMcpDireta}>
+          ▶️ Executar
         </button>
       </div>
-
       {#if mcpToolOutput}
-        <pre class="mcp-json-out">{JSON.stringify(mcpToolOutput, null, 2)}</pre>
+        <pre class="json-viewer">{JSON.stringify(mcpToolOutput, null, 2)}</pre>
       {/if}
     </section>
 
-  {:else if subTab === 'benchmarks'}
-    <!-- ABA 5: BENCHMARKS DE MERCADO 2025/2026 & ESCOLA DE COPYWRITING (PAS, AIDA, BAB, 4 U's, SCHWARTZ) -->
-    <section class="oak-card">
-      <h2>📊 Benchmarks Reais de Tráfego Pago 2025/2026 (OpenAdKit Brasil)</h2>
-      <div class="table-scroll">
-        <table class="oak-table">
+  {:else if secao === 'oak_benchmarks'}
+    <!-- SEÇÃO DEDICADA 7: BENCHMARKS BRASIL & FRAMEWORKS DE COPY -->
+    <div class="sec-header">
+      <div>
+        <h1>📚 Benchmarks Brasil 2025/2026 & Frameworks de Copy</h1>
+        <p>Métricas de referência no mercado brasileiro e estruturas clássicas de persuasão.</p>
+      </div>
+    </div>
+
+    <section class="clean-card">
+      <h2>📊 Tabela de Benchmarks por Plataforma (Brasil)</h2>
+      <div class="table-wrap">
+        <table class="clean-table">
           <thead>
             <tr>
               <th>Métrica</th>
               <th>Plataforma</th>
-              <th>Nicho / Referência</th>
+              <th>Nicho</th>
               <th>Faixa Saudável</th>
-              <th>Diagnóstico Prático</th>
+              <th>Diagnóstico</th>
             </tr>
           </thead>
           <tbody>
@@ -922,8 +763,8 @@
                 <td><strong>{b.metrica}</strong></td>
                 <td>{b.plataforma}</td>
                 <td>{b.nicho}</td>
-                <td><span class="range-pill">{b.min} – {b.max} {b.unidade}</span></td>
-                <td class="muted-sub">{b.nota}</td>
+                <td><span class="badge-blue">{b.min} – {b.max} {b.unidade}</span></td>
+                <td class="card-desc">{b.nota}</td>
               </tr>
             {/each}
           </tbody>
@@ -931,924 +772,455 @@
       </div>
     </section>
 
-    <section class="oak-card">
-      <h2>🎓 Escola Interativa de Copywriting (PAS · AIDA · BAB · 4 U's · Escada de Schwartz)</h2>
-      <div class="fw-grid">
-        {#each frameworks as fw}
-          <div class="fw-card">
-            <div class="var-top">
-              <span class="var-badge">{fw.sigla}</span>
-              <strong>{fw.nome}</strong>
-            </div>
-            <div class="fw-best">📌 Ideal para: {fw.melhor_para}</div>
-            <ul class="fw-steps">
-              {#each fw.estrutura as passo}
-                <li>{passo}</li>
-              {/each}
-            </ul>
-            <div class="fw-example">
-              <strong>Exemplo Pronto em Português:</strong>
-              <p>"{fw.exemplo_pratico}"</p>
-            </div>
+    <div class="cards-grid-3">
+      {#each frameworks as fw}
+        <div class="clean-card variant-item">
+          <div class="item-top">
+            <span class="badge-blue">{fw.sigla}</span>
+            <strong>{fw.nome}</strong>
           </div>
-        {/each}
-      </div>
-    </section>
+          <div class="card-desc">📌 Ideal para: {fw.melhor_para}</div>
+          <ul class="clean-list">
+            {#each fw.estrutura as passo}
+              <li>{passo}</li>
+            {/each}
+          </ul>
+          <div class="sub-box">
+            <strong>Exemplo em Português:</strong>
+            <p>"{fw.exemplo_pratico}"</p>
+          </div>
+        </div>
+      {/each}
+    </div>
   {/if}
 </div>
 
 <style>
-  .oak-wrap {
+  .clean-section {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 20px;
   }
 
-  .oak-compact-header {
+  .sec-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 10px;
-    flex-wrap: wrap;
-  }
-
-  .oak-compact-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-  }
-
-  .btn-hamburger-oak {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
-    color: #fff;
-    border: 1px solid rgba(96, 165, 250, 0.45);
-    border-radius: 8px;
-    padding: 7px 12px;
-    font-size: 0.78rem;
-    font-weight: 800;
-    cursor: pointer;
-    white-space: nowrap;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-    transition: all 0.15s;
-  }
-
-  .btn-hamburger-oak:hover {
-    transform: translateY(-1px);
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-  }
-
-  .ham-lines {
-    font-size: 0.95rem;
-    line-height: 1;
-  }
-
-  .ham-count {
-    background: rgba(255, 255, 255, 0.18);
-    padding: 1px 6px;
-    border-radius: 999px;
-    font-size: 0.67rem;
-  }
-
-  .oak-active-title {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-  }
-
-  .oak-mod-icon {
-    font-size: 1.15rem;
-  }
-
-  .oak-mod-name {
-    font-size: 0.88rem;
-    font-weight: 800;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-
-  .oak-mini-badge {
-    font-size: 0.65rem;
-    font-weight: 700;
-    padding: 1px 7px;
-    border-radius: 999px;
-    background: rgba(59, 130, 246, 0.18);
-    color: #93c5fd;
-    border: 1px solid rgba(59, 130, 246, 0.35);
-  }
-
-  .oak-mod-sub {
-    font-size: 0.72rem;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 390px;
-  }
-
-  .oak-compact-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .oak-inline-pills {
-    display: inline-flex;
-    background: #0b0e14;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 3px;
-    gap: 2px;
-    flex-wrap: wrap;
-  }
-
-  .oak-inline-pills button {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: transparent;
-    color: var(--text-secondary);
-    border: none;
-    border-radius: 6px;
-    padding: 5px 9px;
-    font-size: 0.73rem;
-    font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.12s;
-  }
-
-  .oak-inline-pills button:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .oak-inline-pills button.active {
-    background: var(--primary);
-    color: #fff;
-  }
-
-  .brand-compact-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    color: #6ee7b7;
-    padding: 6px 10px;
-    border-radius: 8px;
-    font-size: 0.74rem;
-    font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .brand-compact-name {
-    max-width: 140px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* MODAL HAMBÚRGUER */
-  .oak-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(3, 7, 18, 0.78);
-    backdrop-filter: blur(5px);
-    z-index: 200;
-    display: grid;
-    place-items: center;
-    padding: 20px;
-  }
-
-  .oak-modal-drawer {
-    width: 100%;
-    max-width: 720px;
-    background: #0f1420;
-    border: 1px solid var(--border-strong);
-    border-radius: 14px;
-    padding: 22px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .oak-modal-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .oak-modal-head h3 {
-    margin: 4px 0 4px;
-    font-size: 1.1rem;
-    font-weight: 800;
-  }
-
-  .oak-modal-head p {
-    margin: 0;
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-
-  .oak-modal-close {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    width: 30px;
-    height: 30px;
-    border-radius: 7px;
-    cursor: pointer;
-    font-weight: 700;
-  }
-
-  .oak-modal-section-title {
-    font-size: 0.72rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-  }
-
-  .oak-modal-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-
-  @media (max-width: 680px) {
-    .oak-modal-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .oak-modal-item {
-    background: #0b0e14;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
-    text-align: left;
-    color: var(--text);
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    transition: all 0.14s;
-  }
-
-  .oak-modal-item:hover {
-    border-color: var(--primary-light);
-    background: rgba(37, 99, 235, 0.08);
-  }
-
-  .oak-modal-item.selected {
-    border-color: #3b82f6;
-    background: rgba(37, 99, 235, 0.16);
-  }
-
-  .oak-mi-top {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.83rem;
-  }
-
-  .oak-mi-icon {
-    font-size: 1rem;
-  }
-
-  .oak-mi-badge {
-    margin-left: auto;
-    font-size: 0.65rem;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 999px;
-    background: rgba(59, 130, 246, 0.2);
-    color: #93c5fd;
-  }
-
-  .oak-modal-item p {
-    margin: 0;
-    font-size: 0.74rem;
-    color: var(--muted);
-    line-height: 1.35;
-  }
-
-  .oak-modal-brand-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
-    font-size: 0.76rem;
-    flex-wrap: wrap;
-  }
-
-  .oak-modal-tpl-chips {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .tpl-quick-chip {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    border-radius: 999px;
-    padding: 4px 9px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .tpl-quick-chip:hover {
-    border-color: #3b82f6;
-    color: #fff;
-  }
-
-  .oak-badges {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 4px;
-    flex-wrap: wrap;
-  }
-
-  .badge-pill {
-    font-size: 0.68rem;
-    font-weight: 800;
-    padding: 2px 8px;
-    border-radius: 999px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .badge-pill.gold {
-    background: rgba(245, 158, 11, 0.2);
-    color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, 0.4);
-  }
-
-  .badge-pill.blue {
-    background: rgba(59, 130, 246, 0.2);
-    color: #93c5fd;
-    border: 1px solid rgba(59, 130, 246, 0.4);
-  }
-
-  .badge-pill.green {
-    background: rgba(16, 185, 129, 0.2);
-    color: #6ee7b7;
-    border: 1px solid rgba(16, 185, 129, 0.4);
-  }
-
-  .oak-grid-2 {
-    display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
     gap: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
   }
 
-  @media (max-width: 980px) {
-    .oak-grid-2 {
-      grid-template-columns: 1fr;
-    }
+  .sec-header h1 {
+    margin: 0;
+    font-size: 1.28rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
-  .oak-card {
+  .sec-header p {
+    margin: 4px 0 0;
+    font-size: 0.83rem;
+    color: var(--muted);
+  }
+
+  .active-brand-tag {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #6ee7b7;
+    padding: 7px 13px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+  }
+
+  .clean-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 18px 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
   }
 
-  .oak-card h2 {
-    margin: 0 0 12px;
+  .clean-card h2 {
+    margin: 0;
     font-size: 0.96rem;
-    font-weight: 750;
+    font-weight: 700;
   }
 
-  .oak-form {
+  .clean-card h3 {
+    margin: 0;
+    font-size: 0.86rem;
+    font-weight: 700;
+  }
+
+  .card-desc {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .clean-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .cards-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+
+  .form-row-4 {
+    display: grid;
+    grid-template-columns: 1.3fr 1.3fr 1fr 0.9fr;
+    gap: 12px;
+  }
+
+  @media (max-width: 1100px) {
+    .clean-grid-2,
+    .cards-grid-3,
+    .form-row-4 {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .form-stack {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
-  .f-row {
+  .field-row {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
   }
 
-  .f-row label {
+  .field-row label {
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-secondary);
   }
 
-  .f-row input,
-  .f-row select,
-  .f-row textarea,
-  .url-extract-bar input,
-  .mcp-console-bar select,
-  .mcp-console-bar input {
+  .field-row input,
+  .field-row select,
+  .field-row textarea,
+  .inline-search input,
+  .inline-search select {
     background: #0b0e14;
     border: 1px solid var(--border-strong);
     color: #fff;
     border-radius: 8px;
-    padding: 8px 11px;
+    padding: 9px 12px;
     font-size: 0.82rem;
     font-family: inherit;
   }
 
-  .f-grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+  .inline-search {
+    display: flex;
     gap: 10px;
   }
 
-  .btn-oak-primary {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
+  .inline-search input {
+    flex: 1;
   }
 
-  .limits-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .limit-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 9px 11px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
-    border-left: 3px solid #3b82f6;
-    font-size: 0.78rem;
-  }
-
-  .limit-item span {
-    color: var(--muted);
-    font-size: 0.72rem;
-  }
-
-  .card-head-flex {
+  .form-actions-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    margin-bottom: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
     flex-wrap: wrap;
   }
 
-  .card-head-flex h2 {
-    margin: 0;
-  }
-
-  .sub-pill {
-    font-size: 0.74rem;
-    color: #93c5fd;
-    background: rgba(37, 99, 235, 0.15);
-    padding: 4px 10px;
-    border-radius: 999px;
-  }
-
-  .variants-grid,
-  .reels-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-  }
-
-  @media (max-width: 1100px) {
-    .variants-grid,
-    .reels-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .variant-card,
-  .reel-card,
-  .tpl-card,
-  .fw-card,
-  .beat-card {
-    background: #0d111a;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-  }
-
-  .var-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.74rem;
-  }
-
-  .var-badge {
-    background: rgba(37, 99, 235, 0.22);
-    color: #60a5fa;
-    padding: 2px 8px;
-    border-radius: 6px;
-    font-weight: 800;
-  }
-
-  .var-badge.purple {
-    background: rgba(139, 92, 246, 0.22);
-    color: #c4b5fd;
-  }
-
-  .var-angle {
+  .rule-hint {
+    font-size: 0.76rem;
     color: var(--muted);
-    font-weight: 600;
   }
 
-  .var-copy {
-    margin: 0;
-    font-size: 0.81rem;
-    line-height: 1.45;
-    color: #e2e8f0;
-  }
-
-  .var-meta-box {
-    background: rgba(255, 255, 255, 0.03);
-    padding: 8px 10px;
-    border-radius: 7px;
-    font-size: 0.74rem;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .ok-green {
-    color: #34d399;
-    font-weight: 700;
-  }
-
-  .btn-apply-var {
-    margin-top: auto;
-    background: rgba(16, 185, 129, 0.18);
-    color: #6ee7b7;
-    border: 1px solid rgba(16, 185, 129, 0.4);
-    border-radius: 7px;
-    padding: 8px 12px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
-  .btn-apply-var:hover {
-    background: #059669;
+  .btn-primary {
+    background: var(--primary);
     color: #fff;
-  }
-
-  .reel-hook,
-  .reel-brief,
-  .reel-script {
-    font-size: 0.77rem;
-    line-height: 1.4;
-  }
-
-  .reel-foot {
-    margin-top: auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.71rem;
-    color: var(--muted);
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .btn-mini-apply {
-    background: rgba(37, 99, 235, 0.2);
-    color: #93c5fd;
-    border: 1px solid rgba(59, 130, 246, 0.4);
-    border-radius: 6px;
-    padding: 5px 10px;
-    font-size: 0.73rem;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 0.82rem;
     font-weight: 700;
     cursor: pointer;
     white-space: nowrap;
   }
 
-  .btn-mini-apply:hover {
-    background: var(--primary);
+  .btn-primary:hover {
+    background: #1d4ed8;
+  }
+
+  .btn-ghost-sm {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    padding: 6px 12px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn-ghost-sm:hover {
+    border-color: var(--primary-light);
     color: #fff;
   }
 
-  .zap-step {
-    background: #0d111a;
+  .btn-apply {
+    margin-top: auto;
+    background: rgba(16, 185, 129, 0.16);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.38);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .btn-apply:hover {
+    background: #059669;
+    color: #fff;
+  }
+
+  .variant-item {
+    justify-content: flex-start;
+  }
+
+  .item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.76rem;
+  }
+
+  .badge-blue {
+    background: rgba(37, 99, 235, 0.2);
+    color: #93c5fd;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .badge-purple {
+    background: rgba(139, 92, 246, 0.2);
+    color: #c4b5fd;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .muted-label {
+    color: var(--muted);
+    font-size: 0.74rem;
+  }
+
+  .copy-body {
+    margin: 0;
+    font-size: 0.83rem;
+    line-height: 1.5;
+    color: #e2e8f0;
+    white-space: pre-line;
+  }
+
+  .meta-summary {
+    background: #0b0e14;
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px 12px;
-    margin-bottom: 8px;
-    font-size: 0.79rem;
-  }
-
-  .zap-step p {
-    margin: 4px 0 0;
-    color: var(--text-secondary);
-  }
-
-  .cal-list {
+    font-size: 0.76rem;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
 
-  .cal-row {
-    display: grid;
-    grid-template-columns: 90px 135px 1fr;
-    gap: 8px;
-    padding: 7px 10px;
-    background: #0d111a;
-    border-radius: 7px;
-    font-size: 0.76rem;
-  }
-
-  .cal-day {
-    font-weight: 700;
-    color: #60a5fa;
-  }
-
-  .cal-fmt {
+  .text-green {
     color: #34d399;
-  }
-
-  .url-extract-bar,
-  .mcp-console-bar {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-    flex-wrap: wrap;
-  }
-
-  .url-extract-bar input,
-  .mcp-console-bar input {
-    flex: 1;
-    min-width: 220px;
-  }
-
-  .tpl-grid,
-  .fw-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-
-  @media (max-width: 900px) {
-    .tpl-grid,
-    .fw-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .tpl-top {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.9rem;
-  }
-
-  .tpl-emoji {
-    font-size: 1.25rem;
-  }
-
-  .tpl-card p {
-    margin: 0;
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-
-  .wiz-actions-row {
-    margin-top: 12px;
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .score-result-box {
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .score-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: #0d111a;
-    padding: 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(16, 185, 129, 0.35);
-  }
-
-  .big-score {
-    font-size: 2rem;
-    font-weight: 900;
-    color: #34d399;
-  }
-
-  .big-score span {
-    font-size: 0.9rem;
-    color: var(--muted);
-  }
-
-  .tier-verdict {
-    font-size: 0.84rem;
-    font-weight: 800;
-    color: #fff;
-  }
-
-  .ctr-pred {
-    font-size: 0.76rem;
-    color: var(--muted);
-  }
-
-  .lever-row,
-  .fix-item,
-  .teardown-box {
-    background: #0d111a;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 9px 11px;
-    font-size: 0.77rem;
-  }
-
-  .lever-head {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 3px;
-  }
-
-  .lever-num {
-    color: #60a5fa;
-    font-weight: 800;
-  }
-
-  .lever-reason {
-    color: var(--muted);
-  }
-
-  .fixes-title {
-    margin: 4px 0 0;
-    font-size: 0.84rem;
-  }
-
-  .gain-tag {
-    color: #34d399;
-    font-size: 0.72rem;
     font-weight: 700;
   }
 
-  .fix-replace {
-    margin-top: 4px;
-    color: #bfdbfe;
-  }
-
-  .lib-links {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-bottom: 10px;
-  }
-
-  .lib-chip {
-    background: rgba(37, 99, 235, 0.14);
-    border: 1px solid rgba(59, 130, 246, 0.35);
-    color: #93c5fd;
-    text-decoration: none;
-    padding: 5px 9px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 600;
-  }
-
-  .why-wins {
-    font-size: 0.74rem;
-    color: #a7f3d0;
-  }
-
-  .mcp-results-list {
-    margin-top: 12px;
+  .tpl-list,
+  .result-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 310px;
+    max-height: 380px;
     overflow-y: auto;
   }
 
-  .mcp-item-row {
+  .tpl-row,
+  .result-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 10px;
-    padding: 9px 11px;
-    background: #0d111a;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #0b0e14;
     border: 1px solid var(--border);
     border-radius: 8px;
-    font-size: 0.79rem;
   }
 
-  .mcp-sub {
-    font-size: 0.71rem;
+  .tpl-row p {
+    margin: 2px 0 0;
+    font-size: 0.74rem;
     color: var(--muted);
-    margin-top: 2px;
   }
 
-  .src-tag {
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
+  .script-block {
+    font-size: 0.79rem;
+    line-height: 1.45;
+  }
+
+  .item-foot {
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.73rem;
+    color: var(--muted);
+  }
+
+  .sub-box {
+    background: #0b0e14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.8rem;
+  }
+
+  .sub-box p {
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.45;
+  }
+
+  .score-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .score-circle {
+    font-size: 1.8rem;
+    font-weight: 900;
     color: #34d399;
-    font-weight: 700;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    padding: 8px 14px;
+    border-radius: 10px;
   }
 
-  .mcp-json-out {
-    margin-top: 12px;
-    background: #080b10;
+  .score-circle span {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .score-verdict {
+    font-size: 0.95rem;
+    font-weight: 800;
+  }
+
+  .levers-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .lever-line {
+    background: #0b0e14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+
+  .lever-top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    margin-bottom: 2px;
+  }
+
+  .fix-box {
+    background: rgba(37, 99, 235, 0.08);
+    border-left: 3px solid #3b82f6;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+  }
+
+  .ext-links {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .json-viewer {
+    background: #070a0f;
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px;
     font-size: 0.74rem;
-    max-height: 260px;
-    overflow: auto;
     color: #93c5fd;
+    max-height: 240px;
+    overflow: auto;
   }
 
-  .oak-table {
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  .clean-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8rem;
   }
 
-  .oak-table th,
-  .oak-table td {
-    padding: 10px;
+  .clean-table th,
+  .clean-table td {
+    padding: 10px 12px;
     border-bottom: 1px solid var(--border);
     text-align: left;
   }
 
-  .range-pill {
-    background: rgba(16, 185, 129, 0.16);
-    color: #34d399;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-weight: 700;
-  }
-
-  .muted-sub {
+  .clean-table th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
     color: var(--muted);
-    font-size: 0.78rem;
   }
 
-  .fw-best {
-    font-size: 0.75rem;
-    color: #93c5fd;
-  }
-
-  .fw-steps {
-    margin: 4px 0;
+  .clean-list {
+    margin: 0;
     padding-left: 18px;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     color: var(--text-secondary);
-  }
-
-  .fw-example {
-    background: rgba(255, 255, 255, 0.03);
-    padding: 8px 10px;
-    border-radius: 7px;
-    font-size: 0.75rem;
-  }
-
-  .fw-example p {
-    margin: 4px 0 0;
-    color: #d1fae5;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
 </style>

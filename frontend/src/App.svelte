@@ -37,6 +37,7 @@
   // Modal de Conexão da Conta Real
   let showConnectModal = $state(false);
   let showNavHamburgerModal = $state(false);
+  let showChatDrawer = $state(false);
   let tokenInput = $state('');
   let accountIdInput = $state('');
   let accountNameInput = $state('');
@@ -581,7 +582,7 @@
 </script>
 
 <div class="app-shell">
-  <!-- 1. SIDEBAR DE NAVEGAÇÃO PREMIUM -->
+  <!-- 1. SIDEBAR DE NAVEGAÇÃO LIMPA (CADA SEÇÃO NO SEU LUGAR, SEM FUNÇÃO DENTRO DE FUNÇÃO) -->
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-logo">∞</div>
@@ -589,17 +590,11 @@
         <div class="brand-name">AdSimples AI</div>
         <div class="brand-sub">Meta Ads Copilot</div>
       </div>
-      <button
-        type="button"
-        class="btn-sidebar-ham"
-        onclick={() => (showNavHamburgerModal = true)}
-        title="Abrir Menu Hambúrguer Geral"
-      >
-        ☰
-      </button>
     </div>
 
     <nav class="nav-list">
+      <div class="nav-group-label">Campanhas & Operação</div>
+
       <button
         type="button"
         class="nav-item"
@@ -619,18 +614,16 @@
       >
         <span class="nav-icon">🪄</span>
         <span>Criação Assistida</span>
-        <span class="nav-badge">4 Etapas</span>
       </button>
 
       <button
         type="button"
         class="nav-item"
-        class:active={activeNav === 'openadkit'}
-        onclick={() => (activeNav = 'openadkit')}
+        class:active={activeNav === 'publicos'}
+        onclick={() => (activeNav = 'publicos')}
       >
-        <span class="nav-icon">🧰</span>
-        <span>OpenAdKit & MCP</span>
-        <span class="nav-badge">PT-BR</span>
+        <span class="nav-icon">👥</span>
+        <span>Loja de Públicos</span>
       </button>
 
       <button
@@ -640,7 +633,79 @@
         onclick={() => (activeNav = 'robo')}
       >
         <span class="nav-icon">🤖</span>
-        <span>Robô & Loja Públicos</span>
+        <span>Robô Otimizador</span>
+      </button>
+
+      <div class="nav-group-label">OpenAdKit & Meta MCP</div>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'oak_brain'}
+        onclick={() => (activeNav = 'oak_brain')}
+      >
+        <span class="nav-icon">🧠</span>
+        <span>Cérebro da Marca</span>
+      </button>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'oak_anuncios'}
+        onclick={() => (activeNav = 'oak_anuncios')}
+      >
+        <span class="nav-icon">✍️</span>
+        <span>Copy Meta Ads</span>
+      </button>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'oak_reels'}
+        onclick={() => (activeNav = 'oak_reels')}
+      >
+        <span class="nav-icon">🎬</span>
+        <span>Roteiros Reels & Zap</span>
+      </button>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'oak_score'}
+        onclick={() => (activeNav = 'oak_score')}
+      >
+        <span class="nav-icon">🎯</span>
+        <span>Creative Score (0–10)</span>
+      </button>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'oak_espiao'}
+        onclick={() => (activeNav = 'oak_espiao')}
+      >
+        <span class="nav-icon">🕵️</span>
+        <span>Espiar Concorrentes</span>
+      </button>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'oak_mcp'}
+        onclick={() => (activeNav = 'oak_mcp')}
+      >
+        <span class="nav-icon">🔌</span>
+        <span>Segmentação Meta MCP</span>
+      </button>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'oak_benchmarks'}
+        onclick={() => (activeNav = 'oak_benchmarks')}
+      >
+        <span class="nav-icon">📚</span>
+        <span>Benchmarks & Copy</span>
       </button>
 
       <button
@@ -653,7 +718,7 @@
         }}
       >
         <span class="nav-icon">🖱️</span>
-        <span>Automação Visual IA</span>
+        <span>Simulador Visual IA</span>
       </button>
     </nav>
 
@@ -700,14 +765,14 @@
 
   <!-- 2. ÁREA CENTRAL DE TRABALHO -->
   <div class="workspace">
-    <!-- BARRA SUPERIOR: CONTA DE ANÚNCIOS REAL & GERENCIADOR (COMPACTA EM 1 LINHA) -->
+    <!-- BARRA SUPERIOR LIMPA EM 1 ÚNICA LINHA -->
     <header class="topbar">
       <div class="account-status">
         <button
           type="button"
           class="btn-top-ham"
           onclick={() => (showNavHamburgerModal = true)}
-          title="Menu Rápido & Ferramentas (☰)"
+          title="Abrir Menu Hambúrguer de Seções (☰)"
         >
           ☰
         </button>
@@ -759,6 +824,15 @@
 
         <button type="button" class="btn-top primary" onclick={() => (showConnectModal = true)}>
           🔗 {connection.connected ? 'Conta / Token' : 'Conectar Meta'}
+        </button>
+
+        <button
+          type="button"
+          class="btn-top ghost"
+          onclick={() => (showChatDrawer = !showChatDrawer)}
+          title="Abrir Assistente Copiloto IA"
+        >
+          💬 Assistente IA
         </button>
       </div>
     </header>
@@ -1329,11 +1403,11 @@
         </div>
 
       {:else if activeNav === 'robo'}
-        <!-- VISÃO 3: ROBÔ OTIMIZADOR & LOJA DE PÚBLICOS (Hackr Ads + meta-ads-kit) -->
+        <!-- SEÇÃO DEDICADA: ROBÔ OTIMIZADOR (WINNERS VS BLEEDERS) -->
         <div class="view-header">
           <div>
-            <h1>🤖 Robô Otimizador & Loja de Públicos</h1>
-            <p>Diagnóstico automático de campanhas (Winners vs. Bleeders) e públicos validados em 1 clique.</p>
+            <h1>🤖 Robô Otimizador (Scale & Kill)</h1>
+            <p>Diagnóstico automático de campanhas para escalar campeãs e pausar desperdício de orçamento.</p>
           </div>
         </div>
 
@@ -1385,11 +1459,16 @@
           </section>
         </div>
 
-        <section class="panel-card">
-          <div class="panel-head">
-            <h2>🎯 Loja de Públicos Prontos (Estilo AdSimples / Hackr Ads)</h2>
-            <span class="panel-sub">Clique em qualquer público para carregar na Criação Assistida</span>
+      {:else if activeNav === 'publicos'}
+        <!-- SEÇÃO DEDICADA: LOJA DE PÚBLICOS PRONTOS -->
+        <div class="view-header">
+          <div>
+            <h1>👥 Loja de Públicos Prontos</h1>
+            <p>Catálogo de públicos validados para aplicar em 1 clique na Criação de Campanha Assistida.</p>
           </div>
+        </div>
+
+        <section class="panel-card">
           <div class="audiences-grid">
             {#each publicos as pub}
               <div class="aud-card">
@@ -1410,10 +1489,12 @@
           </div>
         </section>
 
-      {:else if activeNav === 'openadkit'}
-        <!-- VISÃO OPENADKIT & PIPEBOARD META ADS MCP (100% PORTUGUÊS-BR) -->
+      {:else if activeNav.startsWith('oak_')}
+        <!-- SEÇÕES DEDICADAS DO OPENADKIT & PIPEBOARD MCP (1 FUNÇÃO POR PÁGINA, SEM SUB-ABAS) -->
         <OpenAdKitStudio
+          secao={activeNav}
           bind:planoAssistido
+          onIrParaSecao={(novaSecao) => (activeNav = novaSecao)}
           onAplicarNaCampanha={() => {
             activeNav = 'assistida';
             etapaAssistida = 3;
@@ -1422,10 +1503,10 @@
         />
 
       {:else if activeNav === 'automacao'}
-        <!-- VISÃO 4: AUTOMAÇÃO VISUAL NO GERENCIADOR DE ANÚNCIOS (Mouse IA em Tempo Real) -->
+        <!-- SEÇÃO DEDICADA: SIMULADOR VISUAL NO GERENCIADOR DE ANÚNCIOS -->
         <div class="view-header">
           <div>
-            <h1>🖱️ Automação Visual no Gerenciador de Anúncios</h1>
+            <h1>🖱️ Simulador Visual no Gerenciador de Anúncios</h1>
             <p>Acompanhe o cursor da IA clicando e preenchendo cada etapa da campanha em tempo real.</p>
           </div>
         </div>
@@ -1439,62 +1520,73 @@
       {/if}
     </main>
   </div>
+</div>
 
-  <!-- 3. DOCK LATERAL DIREITO: ASSISTENTE DE CAMPANHAS IA (Estilo octaviosilva2/meta-ads ChatPanel) -->
-  <aside class="chat-dock">
-    <div class="dock-header">
-      <div>
-        <strong>💬 Assistente de Campanhas</strong>
-        <div class="dock-sub">Criação assistida & análise em tempo real</div>
+<!-- GAVETA LATERAL DIREITA (SOB DEMANDA): ASSISTENTE DE CAMPANHAS IA -->
+{#if showChatDrawer}
+  <div class="modal-backdrop" role="presentation" onclick={() => (showChatDrawer = false)}>
+    <aside
+      class="chat-drawer"
+      role="dialog"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.key === 'Escape' && (showChatDrawer = false)}
+    >
+      <div class="dock-header">
+        <div>
+          <strong>💬 Assistente de Campanhas IA</strong>
+          <div class="dock-sub">Criação assistida & análise em tempo real</div>
+        </div>
+        <button type="button" class="modal-close" onclick={() => (showChatDrawer = false)}>✕</button>
       </div>
-    </div>
 
-    <div class="dock-messages">
-      <div class="suggestions-box">
-        <div class="sug-title">Ações Rápidas Assistidas:</div>
-        {#each SUGESTOES_CHAT as sug}
-          <button type="button" class="sug-chip" onclick={() => enviarMensagemChat(sug)}>
-            {sug}
-          </button>
+      <div class="dock-messages">
+        <div class="suggestions-box">
+          <div class="sug-title">Ações Rápidas Assistidas:</div>
+          {#each SUGESTOES_CHAT as sug}
+            <button type="button" class="sug-chip" onclick={() => enviarMensagemChat(sug)}>
+              {sug}
+            </button>
+          {/each}
+        </div>
+
+        {#each chatHistory as item}
+          <div class="msg-bubble {item.autor}">
+            <div class="msg-role">{item.autor === 'ia' ? '🤖 Copiloto IA' : '👤 Você'}</div>
+            <div class="msg-text">{item.texto}</div>
+          </div>
+        {/each}
+
+        {#each toolActivities as act}
+          <div class="tool-pill">🔧 {act}...</div>
         {/each}
       </div>
 
-      {#each chatHistory as item}
-        <div class="msg-bubble {item.autor}">
-          <div class="msg-role">{item.autor === 'ia' ? '🤖 Copiloto IA' : '👤 Você'}</div>
-          <div class="msg-text">{item.texto}</div>
-        </div>
-      {/each}
-
-      {#each toolActivities as act}
-        <div class="tool-pill">🔧 {act}...</div>
-      {/each}
-    </div>
-
-    <form
-      class="dock-form"
-      onsubmit={(e) => {
-        e.preventDefault();
-        enviarMensagemChat();
-      }}
-    >
-      <textarea
-        rows="2"
-        placeholder="Peça para criar ou ajustar campanha (ex: R$ 350/dia em Curitiba)..."
-        bind:value={chatInput}
-        onkeydown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            enviarMensagemChat();
-          }
+      <form
+        class="dock-form"
+        onsubmit={(e) => {
+          e.preventDefault();
+          enviarMensagemChat();
         }}
-      ></textarea>
-      <button type="submit" disabled={enviandoChat}>
-        {enviandoChat ? ' Processando...' : 'Enviar para o Assistente'}
-      </button>
-    </form>
-  </aside>
-</div>
+      >
+        <textarea
+          rows="2"
+          placeholder="Peça para criar ou ajustar campanha (ex: R$ 350/dia em Curitiba)..."
+          bind:value={chatInput}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              enviarMensagemChat();
+            }
+          }}
+        ></textarea>
+        <button type="submit" disabled={enviandoChat}>
+          {enviandoChat ? 'Processando...' : 'Enviar para o Assistente'}
+        </button>
+      </form>
+    </aside>
+  </div>
+{/if}
 
 <!-- MODAL DE CONEXÃO REAL COM A CONTA META ADS -->
 {#if showConnectModal}
@@ -1675,7 +1767,7 @@
   </div>
 {/if}
 
-<!-- MODAL HAMBÚRGUER GLOBAL DE NAVEGAÇÃO RÁPIDA & FERRAMENTAS (☰) -->
+<!-- GAVETA HAMBÚRGUER DE SEÇÕES (CADA SEÇÃO SEPARADA, SEM FUNÇÃO DENTRO DE FUNÇÃO) -->
 {#if showNavHamburgerModal}
   <div class="modal-backdrop" role="presentation" onclick={() => (showNavHamburgerModal = false)}>
     <div
@@ -1686,13 +1778,14 @@
       onkeydown={(e) => e.key === 'Escape' && (showNavHamburgerModal = false)}
     >
       <div class="modal-head">
-        <h3>☰ Central de Navegação & Ferramentas (AdSimples · OpenAdKit · Pipeboard MCP)</h3>
+        <h3>☰ Menu Geral de Seções</h3>
         <button type="button" class="modal-close" onclick={() => (showNavHamburgerModal = false)}>✕</button>
       </div>
       <p class="modal-desc">
-        Acesse qualquer módulo do sistema, configure suas chaves de IA ou sincronize sua conta real do Meta Ads em 1 clique.
+        Selecione diretamente a seção desejada. Cada ferramenta possui sua própria tela dedicada.
       </p>
 
+      <div class="ham-cat-title">1. Operação & Campanhas</div>
       <div class="ham-nav-grid">
         <button
           type="button"
@@ -1704,7 +1797,7 @@
           }}
         >
           <strong>📊 Dashboard & Campanhas ({campanhas.length})</strong>
-          <span>Métricas reais dos últimos 7 dias, gráfico diário e ativação/pausa de campanhas.</span>
+          <span>Resumo de 7 dias, gráfico diário e tabela de campanhas.</span>
         </button>
 
         <button
@@ -1716,21 +1809,21 @@
             showNavHamburgerModal = false;
           }}
         >
-          <strong>🪄 Criação de Campanha Assistida (4 Etapas)</strong>
-          <span>Suba seu criativo (vídeo/imagem), revise público + copy e publique na sua conta Meta Ads.</span>
+          <strong>🪄 Criação Assistida</strong>
+          <span>Criar campanha real passo a passo com anexo de vídeo ou imagem.</span>
         </button>
 
         <button
           type="button"
           class="ham-nav-card"
-          class:active={activeNav === 'openadkit'}
+          class:active={activeNav === 'publicos'}
           onclick={() => {
-            activeNav = 'openadkit';
+            activeNav = 'publicos';
             showNavHamburgerModal = false;
           }}
         >
-          <strong>🧰 Central OpenAdKit & Pipeboard MCP (PT-BR)</strong>
-          <span>18 Geradores de Anúncios, Cérebro da Marca (URL), Creative Score, Steal & Beat e 42 MCP Tools.</span>
+          <strong>👥 Loja de Públicos Prontos</strong>
+          <span>Catálogo de públicos validados para aplicar em 1 clique.</span>
         </button>
 
         <button
@@ -1742,8 +1835,102 @@
             showNavHamburgerModal = false;
           }}
         >
-          <strong>🤖 Robô Otimizador & Loja de Públicos</strong>
-          <span>Escala automática de Winners, pausa de Bleeders e públicos prontos estilo AdSimples.</span>
+          <strong>🤖 Robô Otimizador (Scale & Kill)</strong>
+          <span>Escala automática de Winners e pausa de campanhas com sangria.</span>
+        </button>
+      </div>
+
+      <div class="ham-cat-title">2. Inteligência OpenAdKit & Pipeboard MCP (PT-BR)</div>
+      <div class="ham-nav-grid">
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'oak_brain'}
+          onclick={() => {
+            activeNav = 'oak_brain';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>🧠 Cérebro da Marca (Brand Brain)</strong>
+          <span>Extrair dados da empresa por URL ou ativar template de nicho.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'oak_anuncios'}
+          onclick={() => {
+            activeNav = 'oak_anuncios';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>✍️ Copy Meta Ads (3 Ângulos)</strong>
+          <span>Gerar variantes de anúncio (Dor, Desejo e Prova Social).</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'oak_reels'}
+          onclick={() => {
+            activeNav = 'oak_reels';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>🎬 Roteiros de Reels & WhatsApp</strong>
+          <span>6 roteiros com gancho de 3s + sequência de fechamento no WhatsApp.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'oak_score'}
+          onclick={() => {
+            activeNav = 'oak_score';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>🎯 Avaliador Creative Score (0–10)</strong>
+          <span>Nota das 5 alavancas, previsão de CTR e 3 correções.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'oak_espiao'}
+          onclick={() => {
+            activeNav = 'oak_espiao';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>🕵️ Espionagem de Concorrentes</strong>
+          <span>Engenharia reversa (Steal & Beat) e links da Biblioteca Meta.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'oak_mcp'}
+          onclick={() => {
+            activeNav = 'oak_mcp';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>🔌 Segmentação Meta Graph MCP</strong>
+          <span>Busca oficial de interesses (`adinterest`) e cidades (`adgeolocation`).</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'oak_benchmarks'}
+          onclick={() => {
+            activeNav = 'oak_benchmarks';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>📚 Benchmarks Brasil & Copy</strong>
+          <span>Tabela de métricas 2025/2026 e frameworks PAS/AIDA/BAB.</span>
         </button>
 
         <button
@@ -1756,20 +1943,8 @@
             setTimeout(() => simuladorRef?.iniciarDemonstracaoVisual(), 80);
           }}
         >
-          <strong>🖱️ Automação Visual IA no Gerenciador</strong>
-          <span>Veja o cursor da IA preenchendo campanha, conjunto e criativo em tempo real.</span>
-        </button>
-
-        <button
-          type="button"
-          class="ham-nav-card"
-          onclick={() => {
-            showNavHamburgerModal = false;
-            showApiKeysModal = true;
-          }}
-        >
-          <strong>🔑 Motor de IA & Chaves de API Externa</strong>
-          <span>Troque entre OpenCode, Ollama Local, OpenAI GPT-4o, Claude Sonnet e Google Gemini.</span>
+          <strong>🖱️ Simulador Visual no Gerenciador</strong>
+          <span>Demonstração visual do mouse preenchendo a campanha.</span>
         </button>
       </div>
     </div>
@@ -1779,20 +1954,11 @@
 <style>
   .app-shell {
     display: grid;
-    grid-template-columns: 224px minmax(0, 1fr) 330px;
+    grid-template-columns: 232px minmax(0, 1fr);
     height: 100vh;
     max-height: 100vh;
     overflow: hidden;
     background: var(--bg-app);
-  }
-
-  @media (max-width: 1180px) {
-    .app-shell {
-      grid-template-columns: 206px minmax(0, 1fr);
-    }
-    .chat-dock {
-      display: none;
-    }
   }
 
   /* SIDEBAR */
@@ -1803,7 +1969,7 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    gap: 10px;
+    gap: 8px;
     height: 100vh;
     overflow-y: auto;
   }
@@ -1811,7 +1977,7 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     padding: 2px 6px 12px;
     border-bottom: 1px solid var(--border);
   }
@@ -1821,22 +1987,20 @@
     min-width: 0;
   }
 
-  .btn-sidebar-ham,
   .btn-top-ham {
     background: var(--surface);
     border: 1px solid var(--border-strong);
     color: var(--text-secondary);
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border-radius: 7px;
     display: grid;
     place-items: center;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     cursor: pointer;
     flex-shrink: 0;
   }
 
-  .btn-sidebar-ham:hover,
   .btn-top-ham:hover {
     color: #fff;
     border-color: var(--primary-light);
@@ -1858,7 +2022,7 @@
 
   .brand-name {
     font-weight: 800;
-    font-size: 0.9rem;
+    font-size: 0.92rem;
     letter-spacing: -0.01em;
   }
 
@@ -1870,25 +2034,33 @@
   .nav-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin-top: 2px;
+    gap: 2px;
+  }
+
+  .nav-group-label {
+    font-size: 0.64rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    padding: 8px 8px 3px;
   }
 
   .nav-item {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
     width: 100%;
-    padding: 8px 10px;
-    border-radius: 8px;
+    padding: 7px 10px;
+    border-radius: 7px;
     border: 1px solid transparent;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
     cursor: pointer;
     text-align: left;
-    transition: all 0.15s;
+    transition: all 0.12s;
   }
 
   .nav-item:hover {
@@ -1903,11 +2075,10 @@
   }
 
   .nav-icon {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
   }
 
-  .nav-count,
-  .nav-badge {
+  .nav-count {
     margin-left: auto;
     font-size: 0.64rem;
     font-weight: 700;
@@ -1915,6 +2086,30 @@
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.07);
     color: var(--text-secondary);
+  }
+
+  .ham-cat-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #60a5fa;
+    margin-top: 8px;
+  }
+
+  .chat-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 360px;
+    max-width: 92vw;
+    height: 100vh;
+    background: var(--bg-sidebar);
+    border-left: 1px solid var(--border-strong);
+    display: flex;
+    flex-direction: column;
+    z-index: 250;
+    box-shadow: -16px 0 48px rgba(0, 0, 0, 0.65);
   }
 
   /* MOTOR DE IA FIXO BEM NO CANTO INFERIOR ESQUERDO DA TELA */
