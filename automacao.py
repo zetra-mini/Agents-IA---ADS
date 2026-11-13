@@ -444,7 +444,8 @@ async def _executar_automacao_dom_playwright(
             await asyncio.sleep(0.4)
 
         conjunto = plano.conjuntos[0] if plano.conjuntos else None
-        criativo = plano.criativos[0] if plano.criativos else None
+        anuncios_lista = getattr(plano, "anuncios", [])
+        criativo = anuncios_lista[0] if anuncios_lista else None
         nome_arquivo = Path(caminhos_criativos[0]).name if caminhos_criativos else "criativo_repasse_curitiba.png"
 
         # Passo 1: Clicar em "+ Criar"
@@ -587,7 +588,7 @@ async def _executar_automacao_dom_playwright(
         )
 
         # Passo 5: Anúncio + Upload de Criativo da Pasta Local
-        nome_anuncio = criativo.nome_anuncio if criativo else "Anuncio 01 - Repasse"
+        nome_anuncio = getattr(criativo, "nome", "Anuncio 01 - Repasse") if criativo else "Anuncio 01 - Repasse"
         await _atualizar_status_hud(
             page,
             f"Passo 5/7: Configurando '{nome_anuncio}' e anexando criativo '{nome_arquivo}'...",

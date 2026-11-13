@@ -401,17 +401,17 @@ class MetaAdsHub:
             if caminhos_criativos
             else "criativo_repasse_curitiba.png"
         )
-        for cr in plano.criativos:
+        for cr in getattr(plano, "anuncios", []):
             camp.ads.append(
                 AdItem(
                     id=f"ad_{next(self._ids)}",
                     campaign_id=cid,
-                    name=cr.nome_anuncio,
+                    name=cr.nome,
                     headline=cr.titulo,
                     primary_text=cr.texto_principal,
                     call_to_action=cr.cta,
                     status="PAUSED",
-                    creative_file=cr.arquivo_midia or arquivo_padrao,
+                    creative_file=cr.arquivo_criativo or arquivo_padrao,
                 )
             )
 
