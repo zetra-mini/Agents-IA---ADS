@@ -349,6 +349,28 @@ async def alterar_orcamento_campanha(campaign_id: str, body: OrcamentoCampanhaPa
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/meta/campaigns/{campaign_id}/duplicate")
+async def duplicar_campanha(campaign_id: str) -> dict[str, Any]:
+    """Duplica uma campanha existente (igual ao Gerenciador de Anúncios da Meta)."""
+    try:
+        return await get_meta_hub().duplicate_campaign(campaign_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao duplicar campanha: {exc}") from exc
+
+
+@app.delete("/meta/campaigns/{campaign_id}")
+async def excluir_campanha(campaign_id: str) -> dict[str, Any]:
+    """Exclui ou arquiva uma campanha (status DELETED na Meta Graph API)."""
+    try:
+        return await get_meta_hub().delete_campaign(campaign_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir campanha: {exc}") from exc
+
+
 class ConectarTokenRequest(BaseModel):
     access_token: str
     account_id: str | None = None

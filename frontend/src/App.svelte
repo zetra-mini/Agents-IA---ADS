@@ -36,8 +36,10 @@
 
   // Modal de Conexão da Conta Real
   let showConnectModal = $state(false);
-  let showNavHamburgerModal = $state(false);
+  let showNavDrawer = $state(false);
   let showChatDrawer = $state(false);
+  let buscaCampanha = $state('');
+  let filtroStatus = $state('TODAS'); // 'TODAS' | 'ACTIVE' | 'PAUSED'
   let tokenInput = $state('');
   let accountIdInput = $state('');
   let accountNameInput = $state('');
@@ -63,6 +65,25 @@
       requires_api_key: ['openai', 'anthropic', 'google'].includes(selectedProvider),
     }
   );
+
+  const campanhasFiltradas = $derived.by(() => {
+    let lista = campanhas;
+    if (filtroStatus === 'ACTIVE') {
+      lista = lista.filter((c) => c.status === 'ACTIVE');
+    } else if (filtroStatus === 'PAUSED') {
+      lista = lista.filter((c) => c.status === 'PAUSED');
+    }
+    if (buscaCampanha.trim()) {
+      const termo = buscaCampanha.trim().toLowerCase();
+      lista = lista.filter(
+        (c) =>
+          (c.name || '').toLowerCase().includes(termo) ||
+          (c.id || '').toLowerCase().includes(termo) ||
+          (c.objective || '').toLowerCase().includes(termo)
+      );
+    }
+    return lista;
+  });
 
   // Toast / Notificações discretas
   let toastMessage = $state('');
@@ -422,15 +443,84 @@
   }
 
   async function alternarStatusCampanha(camp) {
-    const novo = camp.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-    const res = await fetch(`/api/meta/campaigns/${camp.id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: novo }),
-    });
-    if (res.ok) {
-      notify(`Campanha "${camp.name}" ${novo === 'ACTIVE' ? 'ativada' : 'pausada'}.`);
+    const statusAnterior = camp.status;
+    const novo = statusAnterior === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    camp.status = novo; // Atualização otimista imediata na interface
+    try {
+      const res = await fetch(`/api/meta/campaigns/${camp.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: novo }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'A Meta recusou a alteração de status.');
+      }
+      notify(`Campanha "${camp.name}" ${novo === 'ACTIVE' ? 'ativada' : 'pausada'} com sucesso!`);
       await carregarTudo();
+    } catch (err) {
+      camp.status = statusAnterior; // Reverte em caso de recusa
+      notify(`Erro ao alterar status: ${err.message}`, 'error');
+    }
+  }
+
+  async function duplicarCampanha(camp) {
+    try {
+      notify(`Duplicando campanha "${camp.name}"...`);
+      const res = await fetch(`/api/meta/campaigns/${camp.id}/duplicate`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Falha ao duplicar campanha.');
+      notify(`Campanha "${camp.name}" duplicada como PAUSADA.`);
+      await carregarTudo();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  }
+
+  async function excluirCampanha(camp) {
+    const confirmou = window.confirm(`Deseja realmente excluir a campanha "${camp.name}"?`);
+    if (!confirmou) return;
+    try {
+      notify(`Excluindo campanha "${camp.name}"...`);
+      const res = await fetch(`/api/meta/campaigns/${camp.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Falha ao excluir campanha.');
+      campanhas = campanhas.filter((c) => c.id !== camp.id);
+      notify(`Campanha "${camp.name}" excluída.`);
+      await carregarTudo();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  }
+
+  async function editarOrcamentoPrompt(camp) {
+    const entrada = window.prompt(
+      `Definir novo orçamento diário para "${camp.name}" (mínimo R$ 6,00):`,
+      camp.daily_budget.toFixed(2)
+    );
+    if (!entrada) return;
+    const valorLimpo = parseFloat(entrada.replace(',', '.'));
+    if (isNaN(valorLimpo) || valorLimpo < 6.0) {
+      notify('Orçamento inválido. O valor diário mínimo é R$ 6,00.', 'error');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/meta/campaigns/${camp.id}/budget`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ daily_budget: valorLimpo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Falha ao atualizar orçamento.');
+      camp.daily_budget = valorLimpo;
+      notify(`Orçamento atualizado para R$ ${valorLimpo.toFixed(2)}/dia.`);
+      await carregarTudo();
+    } catch (err) {
+      notify(err.message, 'error');
     }
   }
 
@@ -720,45 +810,25 @@
         <span class="nav-icon">🖱️</span>
         <span>Simulador Visual IA</span>
       </button>
+
+      <div class="nav-group-label">Sistema & Contas</div>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'configuracoes'}
+        onclick={() => (activeNav = 'configuracoes')}
+      >
+        <span class="nav-icon">⚙️</span>
+        <span>Configurações & Contas</span>
+      </button>
     </nav>
 
-    <!-- MOTOR DE IA FIXO BEM NO CANTO INFERIOR ESQUERDO DA TELA -->
-    <div class="sidebar-footer">
-      <div class="engine-compact-dock">
-        <div class="engine-head-mini">
-          <span class="engine-dot-status" class:ready={activeProviderMeta?.configured}></span>
-          <label for="ai-engine-sel">Motor IA</label>
-          <span class="api-mini-tag" class:online={apiOnline}>
-            {apiOnline ? '8010 ON' : 'OFF'}
-          </span>
-        </div>
-
-        <div class="engine-inline-row">
-          <select id="ai-engine-sel" value={selectedProvider} onchange={aoSelecionarMotorIA}>
-            {#if providers.length === 0}
-              <option value="opencode">OpenCode CLI</option>
-              <option value="ollama">Ollama Local</option>
-              <option value="anthropic">Claude Sonnet</option>
-              <option value="openai">OpenAI GPT-4o</option>
-              <option value="google">Google Gemini</option>
-            {:else}
-              {#each providers as p}
-                <option value={p.id}>
-                  {p.label.split('(')[0].trim()} {p.requires_api_key ? (p.configured ? '✓' : '🔒') : ''}
-                </option>
-              {/each}
-            {/if}
-          </select>
-
-          <button
-            type="button"
-            class="btn-key-icon"
-            onclick={() => (showApiKeysModal = true)}
-            title="Configurar Chaves de API Externa & Motores de IA"
-          >
-            🔑
-          </button>
-        </div>
+    <!-- RODAPÉ LIMPO E MINIMALISTA DA SIDEBAR -->
+    <div class="sidebar-footer-minimal">
+      <div class="status-dot-row">
+        <span class="engine-dot-status ready"></span>
+        <span class="foot-text">Backend 8010 Online</span>
       </div>
     </div>
   </aside>
@@ -767,65 +837,45 @@
   <div class="workspace">
     <!-- BARRA SUPERIOR LIMPA EM 1 ÚNICA LINHA -->
     <header class="topbar">
-      <div class="account-status">
+      <div class="topbar-left">
         <button
           type="button"
           class="btn-top-ham"
-          onclick={() => (showNavHamburgerModal = true)}
-          title="Abrir Menu Hambúrguer de Seções (☰)"
+          class:active={showNavDrawer}
+          onclick={() => (showNavDrawer = !showNavDrawer)}
+          title="Abrir Gaveta de Navegação (☰)"
         >
           ☰
         </button>
-        <span class="conn-indicator" class:connected={connection.connected}></span>
-        <div class="acc-headline">
-          {#if connection.connected}
-            <span>BM: <strong>{connection.business_name}</strong></span>
-            <span class="sep">·</span>
-            <span>Conta: <strong>{connection.selected_account_name || 'Meta Ads'}</strong></span>
-            <code class="act-pill">{connection.selected_account_id}</code>
-          {:else}
-            Gerenciador: <strong>Não conectado</strong>
-            <span class="muted-hint">(Sem Conta Real)</span>
-          {/if}
+        <div class="topbar-title-box">
+          <span class="topbar-section-title">
+            {#if activeNav === 'dashboard'}📊 Dashboard & Campanhas
+            {:else if activeNav === 'assistida'}🪄 Criação Assistida
+            {:else if activeNav === 'publicos'}👥 Loja de Públicos
+            {:else if activeNav === 'robo'}🤖 Robô Otimizador
+            {:else if activeNav === 'oak_brain'}🧠 Cérebro da Marca
+            {:else if activeNav === 'oak_anuncios'}✍️ Copy Meta Ads
+            {:else if activeNav === 'oak_reels'}🎬 Roteiros Reels & Zap
+            {:else if activeNav === 'oak_score'}🎯 Creative Score
+            {:else if activeNav === 'oak_espiao'}🕵️ Espionagem Concorrentes
+            {:else if activeNav === 'oak_mcp'}🔌 Segmentação Meta MCP
+            {:else if activeNav === 'oak_benchmarks'}📚 Benchmarks Brasil
+            {:else if activeNav === 'automacao'}🖱️ Simulador Visual IA
+            {:else if activeNav === 'configuracoes'}⚙️ Configurações & Contas
+            {:else}AdSimples AI
+            {/if}
+          </span>
+          <span class="topbar-conn-badge" class:connected={connection.connected}>
+            {#if connection.connected}
+              🟢 {connection.selected_account_name || 'Conta Conectada'} ({connection.selected_account_id})
+            {:else}
+              ⚪ Modo Demonstração
+            {/if}
+          </span>
         </div>
       </div>
 
       <div class="topbar-actions">
-        {#if connection.available_accounts?.length > 0}
-          <select class="top-select" value={connection.selected_account_id} onchange={trocarContaAtiva}>
-            {#each connection.available_accounts as acc}
-              <option value={acc.id}>
-                {acc.account_status === 1 ? '🟢' : '⚠️'} {acc.name} ({acc.id})
-              </option>
-            {/each}
-          </select>
-        {/if}
-
-        <div class="segmented-mode">
-          <button
-            type="button"
-            class:selected={!connection.somente_dados_reais}
-            onclick={() => definirModoDadosReais(false)}
-          >
-            Demo
-          </button>
-          <button
-            type="button"
-            class:selected={connection.somente_dados_reais}
-            onclick={() => definirModoDadosReais(true)}
-          >
-            🔒 Só Reais
-          </button>
-        </div>
-
-        <button type="button" class="btn-top ghost" onclick={sincronizarDoNavegador} disabled={conectandoConta}>
-          🌐 Sincronizar
-        </button>
-
-        <button type="button" class="btn-top primary" onclick={() => (showConnectModal = true)}>
-          🔗 {connection.connected ? 'Conta / Token' : 'Conectar Meta'}
-        </button>
-
         <button
           type="button"
           class="btn-top ghost"
@@ -833,6 +883,17 @@
           title="Abrir Assistente Copiloto IA"
         >
           💬 Assistente IA
+        </button>
+
+        <button
+          type="button"
+          class="btn-top"
+          class:primary={activeNav === 'configuracoes'}
+          class:ghost={activeNav !== 'configuracoes'}
+          onclick={() => (activeNav = 'configuracoes')}
+          title="Abrir Configurações de Contas & Motores de IA"
+        >
+          ⚙️ Configurações
         </button>
       </div>
     </header>
@@ -930,36 +991,106 @@
           </div>
         </section>
 
-        <!-- TABELA DE CAMPANHAS -->
+        <!-- TABELA DE CAMPANHAS DO GERENCIADOR DE ANÚNCIOS -->
         <section class="panel-card">
           <div class="panel-head">
-            <h2>Campanhas da Conta ({campanhas.length})</h2>
-            <span class="panel-sub">
-              {connection.somente_dados_reais ? 'Exibindo exclusivamente dados reais' : 'Modo demonstração sincronizado'}
-            </span>
+            <div>
+              <h2>Campanhas Meta Ads ({campanhasFiltradas.length} de {campanhas.length})</h2>
+              <span class="panel-sub">
+                {connection.somente_dados_reais ? 'Exibindo exclusivamente dados reais da Conta Meta' : 'Modo demonstração sincronizado'}
+              </span>
+            </div>
+            <div class="adsmanager-head-actions">
+              <a
+                href={connection.selected_account_id ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${connection.selected_account_id.replace('act_', '')}` : 'https://adsmanager.facebook.com/'}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn-top ghost"
+                title="Abrir Gerenciador de Anúncios oficial no facebook.com"
+              >
+                ↗️ Abrir Gerenciador Meta
+              </a>
+              <button type="button" class="btn-top ghost" onclick={carregarTudo} title="Atualizar dados e métricas agora">
+                🔄 Atualizar
+              </button>
+              <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
+                🪄 + Criar Campanha
+              </button>
+            </div>
           </div>
 
-          {#if campanhas.length === 0}
+          <!-- BARRA DE FERRAMENTAS DO GERENCIADOR (FILTROS + BUSCA) -->
+          <div class="adsmanager-toolbar">
+            <div class="status-filter-pills">
+              <button
+                type="button"
+                class="filter-pill"
+                class:active={filtroStatus === 'TODAS'}
+                onclick={() => (filtroStatus = 'TODAS')}
+              >
+                Todas ({campanhas.length})
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                class:active={filtroStatus === 'ACTIVE'}
+                onclick={() => (filtroStatus = 'ACTIVE')}
+              >
+                🟢 Ativas ({campanhas.filter((c) => c.status === 'ACTIVE').length})
+              </button>
+              <button
+                type="button"
+                class="filter-pill"
+                class:active={filtroStatus === 'PAUSED'}
+                onclick={() => (filtroStatus = 'PAUSED')}
+              >
+                ⏸️ Pausadas ({campanhas.filter((c) => c.status === 'PAUSED').length})
+              </button>
+            </div>
+
+            <div class="search-box">
+              <input
+                type="text"
+                placeholder="🔍 Pesquisar campanha por nome ou ID..."
+                bind:value={buscaCampanha}
+              />
+              {#if buscaCampanha}
+                <button type="button" class="search-clear" onclick={() => (buscaCampanha = '')}>✕</button>
+              {/if}
+            </div>
+          </div>
+
+          {#if campanhasFiltradas.length === 0}
             <div class="empty-state">
-              <h3>Nenhuma campanha real carregada neste momento</h3>
-              <p>
-                Você está no modo <strong>Somente Dados Reais</strong>. Conecte seu Token da Meta API no topo, sincronize do navegador ou crie uma campanha em <strong>🪄 Criação Assistida</strong>.
-              </p>
-              <div class="empty-actions">
-                <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
-                  🪄 Criar Campanha Assistida Agora
-                </button>
-                <button type="button" class="btn-top ghost" onclick={() => definirModoDadosReais(false)}>
-                  Ver Campanhas de Demonstração
-                </button>
-              </div>
+              {#if campanhas.length === 0}
+                <h3>Nenhuma campanha real carregada neste momento</h3>
+                <p>
+                  Você está no modo <strong>Somente Dados Reais</strong>. Conecte seu Token da Meta API em <strong>⚙️ Configurações</strong>, sincronize do navegador ou crie uma campanha em <strong>🪄 Criação Assistida</strong>.
+                </p>
+                <div class="empty-actions">
+                  <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
+                    🪄 Criar Campanha Assistida Agora
+                  </button>
+                  <button type="button" class="btn-top ghost" onclick={() => definirModoDadosReais(false)}>
+                    Ver Campanhas de Demonstração
+                  </button>
+                </div>
+              {:else}
+                <h3>Nenhuma campanha encontrada com o filtro atual</h3>
+                <p>Altere o filtro de status ou limpe o termo de busca pesquisado.</p>
+                <div class="empty-actions">
+                  <button type="button" class="btn-top ghost" onclick={() => { filtroStatus = 'TODAS'; buscaCampanha = ''; }}>
+                    Limpar Filtros
+                  </button>
+                </div>
+              {/if}
             </div>
           {:else}
             <div class="table-scroll">
-              <table class="clean-table">
+              <table class="clean-table ads-manager-table">
                 <thead>
                   <tr>
-                    <th>Status</th>
+                    <th style="width: 70px;">Status</th>
                     <th>Campanha</th>
                     <th>Orçamento</th>
                     <th class="num">Gasto 7d</th>
@@ -967,19 +1098,20 @@
                     <th class="num">CPA</th>
                     <th class="num">ROAS</th>
                     <th>Diagnóstico IA</th>
-                    <th class="right">Ações 1-Clique</th>
+                    <th class="right">Ações do Gerenciador</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {#each campanhas as camp}
-                    <tr>
+                  {#each campanhasFiltradas as camp}
+                    <tr class:row-paused={camp.status === 'PAUSED'}>
                       <td>
                         <button
                           type="button"
                           class="toggle-switch"
                           class:on={camp.status === 'ACTIVE'}
                           onclick={() => alternarStatusCampanha(camp)}
-                          aria-label="Alternar status da campanha"
+                          title={camp.status === 'ACTIVE' ? 'Clique para PAUSAR a veiculação desta campanha' : 'Clique para ATIVAR a veiculação desta campanha'}
+                          aria-label={`Status da campanha: ${camp.status}`}
                         >
                           <span class="knob"></span>
                         </button>
@@ -991,10 +1123,23 @@
                             {camp.is_real ? 'CONTA REAL' : 'DEMO'}
                           </span>
                           · {camp.objective.replace('OUTCOME_', '')} · 📍 {(camp.locations || []).join(', ')}
+                          {#if camp.id}
+                            <code class="camp-id-code">ID: {camp.id}</code>
+                          {/if}
                         </div>
                       </td>
                       <td>
-                        <strong>R$ {camp.daily_budget.toFixed(2)}</strong><span class="c-sub">/dia</span>
+                        <div class="budget-cell">
+                          <strong>R$ {camp.daily_budget.toFixed(2)}</strong><span class="c-sub">/dia</span>
+                          <button
+                            type="button"
+                            class="btn-edit-budget"
+                            onclick={() => editarOrcamentoPrompt(camp)}
+                            title="Editar orçamento diário da campanha"
+                          >
+                            ✏️
+                          </button>
+                        </div>
                         <span class="btype-pill">{camp.budget_type}</span>
                       </td>
                       <td class="num">R$ {camp.totals.spend.toFixed(2)}</td>
@@ -1006,14 +1151,45 @@
                       </td>
                       <td class="right">
                         <div class="row-actions">
-                          <button type="button" class="mini-btn up" onclick={() => escalarOrcamento(camp, 1.2)}>
+                          <button
+                            type="button"
+                            class="mini-btn"
+                            onclick={() => alternarStatusCampanha(camp)}
+                            title={camp.status === 'ACTIVE' ? 'Pausar campanha' : 'Ativar campanha'}
+                          >
+                            {camp.status === 'ACTIVE' ? '⏸️ Pausar' : '▶️ Ativar'}
+                          </button>
+                          <button
+                            type="button"
+                            class="mini-btn up"
+                            onclick={() => escalarOrcamento(camp, 1.2)}
+                            title="Aumentar orçamento em +20%"
+                          >
                             +20%
                           </button>
-                          <button type="button" class="mini-btn down" onclick={() => escalarOrcamento(camp, 0.8)}>
+                          <button
+                            type="button"
+                            class="mini-btn down"
+                            onclick={() => escalarOrcamento(camp, 0.8)}
+                            title="Reduzir orçamento em -20%"
+                          >
                             -20%
                           </button>
-                          <button type="button" class="mini-btn" onclick={() => alternarStatusCampanha(camp)}>
-                            {camp.status === 'ACTIVE' ? 'Pausar' : 'Ativar'}
+                          <button
+                            type="button"
+                            class="mini-btn dup"
+                            onclick={() => duplicarCampanha(camp)}
+                            title="Duplicar esta campanha (igual no Gerenciador Meta)"
+                          >
+                            📋 Duplicar
+                          </button>
+                          <button
+                            type="button"
+                            class="mini-btn del"
+                            onclick={() => excluirCampanha(camp)}
+                            title="Excluir campanha da conta"
+                          >
+                            🗑️
                           </button>
                         </div>
                       </td>
@@ -1517,6 +1693,205 @@
           criativos={criativosLista}
           autoStart={true}
         />
+
+      {:else if activeNav === 'configuracoes'}
+        <!-- SEÇÃO DEDICADA: CONFIGURAÇÕES & CONTAS & MOTOR DE IA -->
+        <div class="view-header">
+          <div>
+            <h1>⚙️ Configurações & Contas</h1>
+            <p>Gerencie sua Business Manager (BM), contas de anúncios Meta, tokens de acesso e motor de IA ativo.</p>
+          </div>
+          <div class="header-actions-right">
+            <button
+              type="button"
+              class="btn-cta"
+              onclick={() => (activeNav = 'dashboard')}
+            >
+              📊 Voltar à Dashboard
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-view">
+          <!-- CARD 1: CONTAS META ADS & BUSINESS MANAGER -->
+          <section class="panel-card settings-card">
+            <div class="panel-head">
+              <div>
+                <h2>🏢 Gerenciador de Negócios & Contas Meta Ads</h2>
+                <span class="panel-sub">Sincronização oficial com a Meta Graph API v22.0</span>
+              </div>
+              <span class="conn-badge" class:connected={connection.connected}>
+                {connection.connected ? '🟢 Conectado' : '🟡 Modo Demonstração'}
+              </span>
+            </div>
+
+            <div class="settings-content-grid">
+              <div class="info-block">
+                <span class="info-label">Business Manager (BM):</span>
+                <span class="info-val strong">{connection.business_name || 'Não identificado'}</span>
+              </div>
+
+              <div class="info-block">
+                <span class="info-label">Conta Selecionada:</span>
+                <span class="info-val">
+                  <strong>{connection.selected_account_name || 'Conta dos anúncios'}</strong>
+                  <code class="act-pill">{connection.selected_account_id || 'act_3339104319737592'}</code>
+                </span>
+              </div>
+
+              {#if connection.available_accounts?.length > 0}
+                <div class="info-block">
+                  <label for="cfg-select-acc" class="info-label">Trocar Conta Ativa:</label>
+                  <select id="cfg-select-acc" class="settings-select" value={connection.selected_account_id} onchange={trocarContaAtiva}>
+                    {#each connection.available_accounts as acc}
+                      <option value={acc.id}>
+                        {acc.account_status === 1 ? '🟢' : '⚠️'} {acc.name} ({acc.id})
+                      </option>
+                    {/each}
+                  </select>
+                </div>
+              {/if}
+
+              <div class="info-block">
+                <span class="info-label">Modo de Exibição dos Dados:</span>
+                <div class="segmented-mode">
+                  <button
+                    type="button"
+                    class:selected={!connection.somente_dados_reais}
+                    onclick={() => definirModoDadosReais(false)}
+                  >
+                    Demo (Demonstração)
+                  </button>
+                  <button
+                    type="button"
+                    class:selected={connection.somente_dados_reais}
+                    onclick={() => definirModoDadosReais(true)}
+                  >
+                    🔒 Só Reais (Ocultar Demo)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions-row">
+              <button
+                type="button"
+                class="btn-top ghost"
+                onclick={sincronizarDoNavegador}
+                disabled={conectandoConta}
+              >
+                🌐 Sincronizar Sessão do Navegador
+              </button>
+
+              <button
+                type="button"
+                class="btn-top primary"
+                onclick={() => (showConnectModal = true)}
+              >
+                🔗 {connection.connected ? 'Alterar Token Meta API' : 'Conectar Token Meta API'}
+              </button>
+
+              <a
+                href={connection.selected_account_id ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${connection.selected_account_id.replace('act_', '')}` : 'https://adsmanager.facebook.com/'}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn-top ghost"
+              >
+                ↗️ Abrir no Gerenciador Meta Oficial
+              </a>
+            </div>
+          </section>
+
+          <!-- CARD 2: MOTOR DE INTELIGÊNCIA ARTIFICIAL -->
+          <section class="panel-card settings-card">
+            <div class="panel-head">
+              <div>
+                <h2>🤖 Motor de Inteligência Artificial & Automação</h2>
+                <span class="panel-sub">Escolha qual modelo gera copies, audiências e orquestra a criação</span>
+              </div>
+              <span class="engine-tag" class:ready={activeProviderMeta?.configured}>
+                {activeProviderMeta?.configured ? '🟢 Motor Pronto' : '🔒 Requer Chave'}
+              </span>
+            </div>
+
+            <div class="settings-engine-body">
+              <div class="field">
+                <label for="cfg-engine-active">Motor de IA Ativo no Sistema</label>
+                <select id="cfg-engine-active" class="settings-select-large" value={selectedProvider} onchange={aoSelecionarMotorIA}>
+                  {#if providers.length === 0}
+                    <option value="opencode">OpenCode CLI (Prioritário / Sem Custo)</option>
+                    <option value="ollama">IA Local (Ollama - 100% Localhost)</option>
+                    <option value="anthropic">Anthropic Claude (Sonnet 4 / 3.5)</option>
+                    <option value="openai">OpenAI (GPT-4o / GPT-4.1)</option>
+                    <option value="google">Google Gemini (2.5 Flash / Pro)</option>
+                  {:else}
+                    {#each providers as p}
+                      <option value={p.id}>
+                        {p.label} {p.requires_api_key ? (p.configured ? '✓ (Chave salva)' : '🔒 (Sem chave)') : '⚡ (Local)'}
+                      </option>
+                    {/each}
+                  {/if}
+                </select>
+                <small class="hint-small">
+                  {#if selectedProvider === 'opencode'}
+                    ⚡ <strong>OpenCode CLI:</strong> Execução nativa de alta velocidade e raciocínio de código sem custos de API.
+                  {:else if selectedProvider === 'ollama'}
+                    🏠 <strong>IA Local Ollama:</strong> Processamento 100% no seu computador (porta 11434). Zero envio de dados para fora.
+                  {:else if selectedProvider === 'anthropic'}
+                    🧠 <strong>Anthropic Claude:</strong> Máxima persuasão para redação de copies de alta conversão.
+                  {:else if selectedProvider === 'openai'}
+                    🤖 <strong>OpenAI GPT-4o:</strong> Modelo multimodal para análise rápida de criativos e campanhas.
+                  {:else if selectedProvider === 'google'}
+                    ✨ <strong>Google Gemini:</strong> Respostas rápidas e janela de contexto estendida.
+                  {/if}
+                </small>
+              </div>
+
+              <div class="engine-buttons-row">
+                <button
+                  type="button"
+                  class="btn-cta"
+                  onclick={() => (showApiKeysModal = true)}
+                >
+                  🔑 Configurar Chaves de API & Modelos (.env)
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- CARD 3: STATUS DO SISTEMA E INTEGRAÇÕES -->
+          <section class="panel-card settings-card">
+            <div class="panel-head">
+              <h2>🛠️ Status das Ferramentas & MCP Integrados</h2>
+            </div>
+            <div class="integrations-list">
+              <div class="integ-item">
+                <span class="integ-icon">🔌</span>
+                <div class="integ-info">
+                  <strong>Pipeboard Meta Ads MCP (42 Tools)</strong>
+                  <span>Ferramentas oficiais: `adinterest`, `adgeolocation`, `create_campaign`, `update_budget`, `insights`.</span>
+                </div>
+                <span class="integ-status ok">Ativo</span>
+              </div>
+              <div class="integ-item">
+                <span class="integ-icon">🧰</span>
+                <div class="integ-info">
+                  <strong>OpenAdKit v1.1 PT-BR</strong>
+                  <span>18 geradores, Brand Brain, Creative Score 5 alavancas e espionagem Steal & Beat.</span>
+                </div>
+                <span class="integ-status ok">Carregado</span>
+              </div>
+              <div class="integ-item">
+                <span class="integ-icon">🚀</span>
+                <div class="integ-info">
+                  <strong>Backend FastAPI (Porta 8010)</strong>
+                  <span>API REST de orquestração com suporte a Graph API v22.0.</span>
+                </div>
+                <span class="integ-status" class:ok={apiOnline}>{apiOnline ? 'Online' : 'Offline'}</span>
+              </div>
+            </div>
+          </section>
+        </div>
       {/if}
     </main>
   </div>
@@ -1524,8 +1899,8 @@
 
 <!-- GAVETA LATERAL DIREITA (SOB DEMANDA): ASSISTENTE DE CAMPANHAS IA -->
 {#if showChatDrawer}
-  <div class="modal-backdrop" role="presentation" onclick={() => (showChatDrawer = false)}>
-    <aside
+  <div class="modal-backdrop drawer-backdrop" role="presentation" onclick={() => (showChatDrawer = false)}>
+    <div
       class="chat-drawer"
       role="dialog"
       tabindex="-1"
@@ -1584,7 +1959,7 @@
           {enviandoChat ? 'Processando...' : 'Enviar para o Assistente'}
         </button>
       </form>
-    </aside>
+    </div>
   </div>
 {/if}
 
@@ -1767,185 +2142,248 @@
   </div>
 {/if}
 
-<!-- GAVETA HAMBÚRGUER DE SEÇÕES (CADA SEÇÃO SEPARADA, SEM FUNÇÃO DENTRO DE FUNÇÃO) -->
-{#if showNavHamburgerModal}
-  <div class="modal-backdrop" role="presentation" onclick={() => (showNavHamburgerModal = false)}>
+<!-- GAVETA LATERAL ESQUERDA (DESLIZA AO CLICAR NO ☰): MENU GERAL DE NAVEGAÇÃO -->
+{#if showNavDrawer}
+  <div class="modal-backdrop drawer-backdrop" role="presentation" onclick={() => (showNavDrawer = false)}>
     <div
-      class="modal-card modal-wide"
+      class="nav-drawer"
       role="dialog"
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.key === 'Escape' && (showNavHamburgerModal = false)}
+      onkeydown={(e) => e.key === 'Escape' && (showNavDrawer = false)}
     >
-      <div class="modal-head">
-        <h3>☰ Menu Geral de Seções</h3>
-        <button type="button" class="modal-close" onclick={() => (showNavHamburgerModal = false)}>✕</button>
-      </div>
-      <p class="modal-desc">
-        Selecione diretamente a seção desejada. Cada ferramenta possui sua própria tela dedicada.
-      </p>
-
-      <div class="ham-cat-title">1. Operação & Campanhas</div>
-      <div class="ham-nav-grid">
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'dashboard'}
-          onclick={() => {
-            activeNav = 'dashboard';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>📊 Dashboard & Campanhas ({campanhas.length})</strong>
-          <span>Resumo de 7 dias, gráfico diário e tabela de campanhas.</span>
-        </button>
-
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'assistida'}
-          onclick={() => {
-            activeNav = 'assistida';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>🪄 Criação Assistida</strong>
-          <span>Criar campanha real passo a passo com anexo de vídeo ou imagem.</span>
-        </button>
-
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'publicos'}
-          onclick={() => {
-            activeNav = 'publicos';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>👥 Loja de Públicos Prontos</strong>
-          <span>Catálogo de públicos validados para aplicar em 1 clique.</span>
-        </button>
-
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'robo'}
-          onclick={() => {
-            activeNav = 'robo';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>🤖 Robô Otimizador (Scale & Kill)</strong>
-          <span>Escala automática de Winners e pausa de campanhas com sangria.</span>
-        </button>
+      <div class="drawer-head">
+        <div class="drawer-brand">
+          <div class="brand-logo-mini">∞</div>
+          <div>
+            <strong>AdSimples AI</strong>
+            <div class="drawer-sub">Menu de Navegação</div>
+          </div>
+        </div>
+        <button type="button" class="modal-close" onclick={() => (showNavDrawer = false)} title="Fechar gaveta">✕</button>
       </div>
 
-      <div class="ham-cat-title">2. Inteligência OpenAdKit & Pipeboard MCP (PT-BR)</div>
-      <div class="ham-nav-grid">
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'oak_brain'}
-          onclick={() => {
-            activeNav = 'oak_brain';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>🧠 Cérebro da Marca (Brand Brain)</strong>
-          <span>Extrair dados da empresa por URL ou ativar template de nicho.</span>
-        </button>
+      <div class="drawer-content">
+        <div class="drawer-section-label">1. Operação & Campanhas</div>
+        <div class="drawer-links">
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'dashboard'}
+            onclick={() => {
+              activeNav = 'dashboard';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">📊</span>
+            <div>
+              <strong>Dashboard & Campanhas</strong>
+              <span>Resumo 7d, gráfico e tabela ({campanhas.length})</span>
+            </div>
+          </button>
 
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'oak_anuncios'}
-          onclick={() => {
-            activeNav = 'oak_anuncios';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>✍️ Copy Meta Ads (3 Ângulos)</strong>
-          <span>Gerar variantes de anúncio (Dor, Desejo e Prova Social).</span>
-        </button>
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'assistida'}
+            onclick={() => {
+              activeNav = 'assistida';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">🪄</span>
+            <div>
+              <strong>Criação Assistida</strong>
+              <span>Passo a passo com foto ou vídeo</span>
+            </div>
+          </button>
 
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'oak_reels'}
-          onclick={() => {
-            activeNav = 'oak_reels';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>🎬 Roteiros de Reels & WhatsApp</strong>
-          <span>6 roteiros com gancho de 3s + sequência de fechamento no WhatsApp.</span>
-        </button>
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'publicos'}
+            onclick={() => {
+              activeNav = 'publicos';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">👥</span>
+            <div>
+              <strong>Loja de Públicos</strong>
+              <span>Públicos validados para aplicar em 1 clique</span>
+            </div>
+          </button>
 
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'oak_score'}
-          onclick={() => {
-            activeNav = 'oak_score';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>🎯 Avaliador Creative Score (0–10)</strong>
-          <span>Nota das 5 alavancas, previsão de CTR e 3 correções.</span>
-        </button>
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'robo'}
+            onclick={() => {
+              activeNav = 'robo';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">🤖</span>
+            <div>
+              <strong>Robô Otimizador</strong>
+              <span>Escalar Winners e pausar Bleeders</span>
+            </div>
+          </button>
+        </div>
 
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'oak_espiao'}
-          onclick={() => {
-            activeNav = 'oak_espiao';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>🕵️ Espionagem de Concorrentes</strong>
-          <span>Engenharia reversa (Steal & Beat) e links da Biblioteca Meta.</span>
-        </button>
+        <div class="drawer-section-label">2. OpenAdKit & Meta MCP</div>
+        <div class="drawer-links">
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'oak_brain'}
+            onclick={() => {
+              activeNav = 'oak_brain';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">🧠</span>
+            <div>
+              <strong>Cérebro da Marca</strong>
+              <span>Extrair dados por URL e nichos</span>
+            </div>
+          </button>
 
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'oak_mcp'}
-          onclick={() => {
-            activeNav = 'oak_mcp';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>🔌 Segmentação Meta Graph MCP</strong>
-          <span>Busca oficial de interesses (`adinterest`) e cidades (`adgeolocation`).</span>
-        </button>
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'oak_anuncios'}
+            onclick={() => {
+              activeNav = 'oak_anuncios';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">✍️</span>
+            <div>
+              <strong>Copy Meta Ads</strong>
+              <span>3 ângulos de alta conversão</span>
+            </div>
+          </button>
 
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'oak_benchmarks'}
-          onclick={() => {
-            activeNav = 'oak_benchmarks';
-            showNavHamburgerModal = false;
-          }}
-        >
-          <strong>📚 Benchmarks Brasil & Copy</strong>
-          <span>Tabela de métricas 2025/2026 e frameworks PAS/AIDA/BAB.</span>
-        </button>
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'oak_reels'}
+            onclick={() => {
+              activeNav = 'oak_reels';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">🎬</span>
+            <div>
+              <strong>Roteiros Reels & Zap</strong>
+              <span>Ganchos de 3s e funil no WhatsApp</span>
+            </div>
+          </button>
 
-        <button
-          type="button"
-          class="ham-nav-card"
-          class:active={activeNav === 'automacao'}
-          onclick={() => {
-            activeNav = 'automacao';
-            showNavHamburgerModal = false;
-            setTimeout(() => simuladorRef?.iniciarDemonstracaoVisual(), 80);
-          }}
-        >
-          <strong>🖱️ Simulador Visual no Gerenciador</strong>
-          <span>Demonstração visual do mouse preenchendo a campanha.</span>
-        </button>
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'oak_score'}
+            onclick={() => {
+              activeNav = 'oak_score';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">🎯</span>
+            <div>
+              <strong>Creative Score (0–10)</strong>
+              <span>Nota das 5 alavancas e previsão CTR</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'oak_espiao'}
+            onclick={() => {
+              activeNav = 'oak_espiao';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">🕵️</span>
+            <div>
+              <strong>Espiar Concorrentes</strong>
+              <span>Steal & Beat na Biblioteca Meta</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'oak_mcp'}
+            onclick={() => {
+              activeNav = 'oak_mcp';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">🔌</span>
+            <div>
+              <strong>Segmentação Meta MCP</strong>
+              <span>Busca oficial Graph API de interesses</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'oak_benchmarks'}
+            onclick={() => {
+              activeNav = 'oak_benchmarks';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">📚</span>
+            <div>
+              <strong>Benchmarks & Copy</strong>
+              <span>Métricas de mercado Brasil e fórmulas</span>
+            </div>
+          </button>
+        </div>
+
+        <div class="drawer-section-label">3. Automação & Simulação</div>
+        <div class="drawer-links">
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'automacao'}
+            onclick={() => {
+              activeNav = 'automacao';
+              showNavDrawer = false;
+              setTimeout(() => simuladorRef?.iniciarDemonstracaoVisual(), 80);
+            }}
+          >
+            <span class="d-icon">🖱️</span>
+            <div>
+              <strong>Simulador Visual IA</strong>
+              <span>Demonstração de preenchimento autônomo</span>
+            </div>
+          </button>
+        </div>
+
+        <div class="drawer-section-label">4. Sistema & Configurações</div>
+        <div class="drawer-links">
+          <button
+            type="button"
+            class="drawer-link-btn"
+            class:active={activeNav === 'configuracoes'}
+            onclick={() => {
+              activeNav = 'configuracoes';
+              showNavDrawer = false;
+            }}
+          >
+            <span class="d-icon">⚙️</span>
+            <div>
+              <strong>Configurações & Contas</strong>
+              <span>BM, Token Meta, Sincronização e Motor IA</span>
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -2112,27 +2550,21 @@
     box-shadow: -16px 0 48px rgba(0, 0, 0, 0.65);
   }
 
-  /* MOTOR DE IA FIXO BEM NO CANTO INFERIOR ESQUERDO DA TELA */
-  .sidebar-footer {
+  /* RODAPÉ MINIMALISTA DA SIDEBAR */
+  .sidebar-footer-minimal {
     margin-top: auto;
     padding-top: 10px;
     border-top: 1px solid var(--border);
   }
 
-  .engine-compact-dock {
-    background: rgba(15, 23, 42, 0.75);
-    border: 1px solid var(--border-strong);
-    border-radius: 9px;
-    padding: 8px 9px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .engine-head-mini {
+  .status-dot-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--border);
   }
 
   .engine-dot-status {
@@ -2147,104 +2579,10 @@
     box-shadow: 0 0 6px #10b981;
   }
 
-  .engine-head-mini label {
-    font-size: 0.66rem;
-    font-weight: 800;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin: 0;
-  }
-
-  .api-mini-tag {
-    margin-left: auto;
-    font-size: 0.61rem;
+  .foot-text {
+    font-size: 0.7rem;
     font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 999px;
-    background: rgba(239, 68, 68, 0.16);
-    color: #fca5a5;
-  }
-
-  .api-mini-tag.online {
-    background: rgba(16, 185, 129, 0.15);
-    color: #6ee7b7;
-  }
-
-  .engine-inline-row {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .engine-inline-row select {
-    flex: 1;
-    min-width: 0;
-    background: #0b0e14;
-    color: var(--text);
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-    padding: 4px 6px;
-    font-size: 0.73rem;
-    font-weight: 600;
-  }
-
-  .btn-key-icon {
-    background: rgba(37, 99, 235, 0.18);
-    border: 1px solid rgba(59, 130, 246, 0.4);
-    color: #93c5fd;
-    border-radius: 6px;
-    width: 27px;
-    height: 27px;
-    display: grid;
-    place-items: center;
-    font-size: 0.78rem;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: all 0.14s;
-  }
-
-  .btn-key-icon:hover {
-    background: var(--primary);
-    color: #fff;
-  }
-
-  .ham-nav-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    margin-top: 8px;
-  }
-
-  .ham-nav-card {
-    background: #0b0e14;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
-    text-align: left;
-    color: var(--text);
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    transition: all 0.14s;
-  }
-
-  .ham-nav-card:hover,
-  .ham-nav-card.active {
-    border-color: #3b82f6;
-    background: rgba(37, 99, 235, 0.14);
-  }
-
-  .ham-nav-card strong {
-    font-size: 0.84rem;
-    color: #fff;
-  }
-
-  .ham-nav-card span {
-    font-size: 0.74rem;
-    color: var(--muted);
-    line-height: 1.35;
+    color: var(--text-secondary);
   }
 
   /* WORKSPACE CENTRAL */
@@ -2260,80 +2598,528 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 10px;
-    padding: 8px 18px;
+    gap: 12px;
+    padding: 10px 20px;
     background: var(--bg-sidebar);
     border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
+    min-height: 52px;
   }
 
-  .account-status {
+  .topbar-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     min-width: 0;
   }
 
-  .conn-indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #f59e0b;
-    flex-shrink: 0;
+  .topbar-title-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
-  .conn-indicator.connected {
-    background: #10b981;
-    box-shadow: 0 0 8px #10b981;
-  }
-
-  .acc-headline {
-    font-size: 0.77rem;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .acc-headline strong {
+  .topbar-section-title {
+    font-size: 0.95rem;
+    font-weight: 800;
     color: #fff;
+    letter-spacing: -0.01em;
   }
 
-  .sep {
-    margin: 0 5px;
-    color: var(--muted);
+  .topbar-conn-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
   }
 
-  .muted-hint {
-    color: var(--muted);
-    font-size: 0.73rem;
-    margin-left: 4px;
-  }
-
-  .act-pill {
-    background: var(--surface-elevated);
-    color: #38bdf8;
-    padding: 1px 6px;
-    border-radius: 5px;
-    font-size: 0.71rem;
-    margin-left: 4px;
+  .topbar-conn-badge.connected {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
   }
 
   .topbar-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
-    flex-wrap: nowrap;
+    gap: 8px;
+    flex-shrink: 0;
   }
 
-  .top-select {
+  .btn-top {
+    border-radius: 7px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border-strong);
+    transition: all 0.13s;
+  }
+
+  .btn-top.ghost {
+    background: var(--surface);
+    color: var(--text-secondary);
+  }
+
+  .btn-top.ghost:hover {
+    color: #fff;
+    border-color: var(--border);
+  }
+
+  .btn-top.primary {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary-light);
+  }
+
+  .btn-top.primary:hover {
+    background: #1d4ed8;
+  }
+
+  /* GAVETA LATERAL ESQUERDA (TIPO UMA GAVETA) */
+  .drawer-backdrop {
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+    padding: 0 !important;
+  }
+
+  .nav-drawer {
+    width: 320px;
+    max-width: 85vw;
+    height: 100vh;
+    background: #0f172a;
+    border-right: 1px solid var(--border-strong);
+    display: flex;
+    flex-direction: column;
+    z-index: 1050;
+    box-shadow: 16px 0 48px rgba(0, 0, 0, 0.75);
+    animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow-y: auto;
+  }
+
+  @keyframes slideInLeft {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .drawer-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    background: #0b0f19;
+  }
+
+  .drawer-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-logo-mini {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #2563eb, #06b6d4);
+    display: grid;
+    place-items: center;
+    font-weight: 900;
+    font-size: 14px;
+    color: #fff;
+  }
+
+  .drawer-brand strong {
+    font-size: 0.92rem;
+    color: #fff;
+  }
+
+  .drawer-sub {
+    font-size: 0.68rem;
+    color: var(--muted);
+  }
+
+  .drawer-content {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .drawer-section-label {
+    font-size: 0.66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #60a5fa;
+    padding: 8px 6px 2px;
+    margin-top: 4px;
+  }
+
+  .drawer-links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .drawer-link-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.14s;
+    width: 100%;
+  }
+
+  .drawer-link-btn:hover {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+
+  .drawer-link-btn.active {
+    background: rgba(37, 99, 235, 0.18);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #93c5fd;
+  }
+
+  .drawer-link-btn strong {
+    display: block;
+    font-size: 0.82rem;
+    color: #fff;
+  }
+
+  .drawer-link-btn span {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    line-height: 1.25;
+  }
+
+  .d-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+
+  /* TOOLBAR E RECURSOS DO GERENCIADOR DE ANÚNCIOS (META ADS) */
+  .adsmanager-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .adsmanager-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin: 14px 0 16px;
+    padding: 10px 14px;
+    background: #0b0f19;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    flex-wrap: wrap;
+  }
+
+  .status-filter-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .filter-pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: 7px;
+    padding: 5px 11px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.13s;
+  }
+
+  .filter-pill:hover {
+    color: #fff;
+    border-color: var(--border-strong);
+  }
+
+  .filter-pill.active {
+    background: rgba(37, 99, 235, 0.2);
+    border-color: #3b82f6;
+    color: #93c5fd;
+  }
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    position: relative;
+    min-width: 260px;
+  }
+
+  .search-box input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 28px 6px 10px;
+    font-size: 0.77rem;
+  }
+
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+  }
+
+  .budget-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-edit-budget {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+  }
+
+  .btn-edit-budget:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .camp-id-code {
+    background: rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    margin-left: 4px;
+  }
+
+  .row-paused {
+    opacity: 0.72;
+  }
+
+  .mini-btn.dup {
+    background: rgba(59, 130, 246, 0.14);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #93c5fd;
+  }
+
+  .mini-btn.dup:hover {
+    background: #2563eb;
+    color: #fff;
+  }
+
+  .mini-btn.del {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+  }
+
+  .mini-btn.del:hover {
+    background: #dc2626;
+    color: #fff;
+  }
+
+  /* VIEW DE CONFIGURAÇÕES */
+  .settings-view {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 10px;
+  }
+
+  .settings-card {
+    padding: 22px;
+  }
+
+  .settings-content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin: 16px 0;
+  }
+
+  .info-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .info-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+
+  .info-val {
+    font-size: 0.88rem;
+    color: var(--text);
+  }
+
+  .info-val.strong {
+    font-weight: 700;
+    color: #fff;
+    font-size: 0.95rem;
+  }
+
+  .settings-select {
     background: var(--surface);
     color: #fff;
     border: 1px solid var(--border-strong);
-    border-radius: 7px;
-    padding: 4px 8px;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    width: 100%;
+  }
+
+  .settings-select-large {
+    background: var(--surface);
+    color: #fff;
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    padding: 10px 12px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    width: 100%;
+  }
+
+  .settings-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .settings-engine-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .engine-buttons-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .hint-small {
+    display: block;
+    font-size: 0.76rem;
+    color: var(--muted);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  .integrations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .integ-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 9px;
+    background: #0b0f19;
+    border: 1px solid var(--border);
+  }
+
+  .integ-icon {
+    font-size: 1.3rem;
+  }
+
+  .integ-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .integ-info strong {
+    display: block;
+    font-size: 0.84rem;
+    color: #fff;
+  }
+
+  .integ-info span {
     font-size: 0.74rem;
-    max-width: 220px;
+    color: var(--muted);
+  }
+
+  .integ-status {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(239, 68, 68, 0.16);
+    color: #fca5a5;
+  }
+
+  .integ-status.ok {
+    background: rgba(16, 185, 129, 0.16);
+    color: #6ee7b7;
+  }
+
+  .conn-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.16);
+    color: #f59e0b;
+  }
+
+  .conn-badge.connected {
+    background: rgba(16, 185, 129, 0.16);
+    color: #10b981;
+  }
+
+  .engine-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.16);
+    color: #f59e0b;
+  }
+
+  .engine-tag.ready {
+    background: rgba(16, 185, 129, 0.16);
+    color: #10b981;
   }
 
   .segmented-mode {
@@ -2358,26 +3144,6 @@
   .segmented-mode button.selected {
     background: var(--surface-elevated);
     color: #fff;
-  }
-
-  .btn-top {
-    border-radius: 7px;
-    padding: 6px 12px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    border: 1px solid var(--border-strong);
-  }
-
-  .btn-top.ghost {
-    background: var(--surface);
-    color: var(--text-secondary);
-  }
-
-  .btn-top.primary {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary-light);
   }
 
   .toast-bar {

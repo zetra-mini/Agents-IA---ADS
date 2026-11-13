@@ -243,6 +243,9 @@ class MetaAdsHub:
         self._ids = count(1001)
         self._campaigns: dict[str, CampaignItem] = {}
         self._real_campaigns: dict[str, CampaignItem] = {}
+        self._status_overrides: dict[str, str] = {}
+        self._budget_overrides: dict[str, float] = {}
+        self._deleted_ids: set[str] = set()
         self._insights: dict[str, list[dict[str, Any]]] = {}
         self._access_token: str = os.getenv("META_ACCESS_TOKEN", "").strip()
         self._selected_account_id: str = os.getenv("META_AD_ACCOUNT_ID", "").strip()
@@ -675,25 +678,52 @@ class MetaAdsHub:
             except Exception:
                 pass
         if self._somente_dados_reais or self.mode == "browser":
-            return [self._serialize_campaign(c, is_real=True) for c in self._real_campaigns.values()]
+            return [
+                self._serialize_campaign(c, is_real=True)
+                for c in self._real_campaigns.values()
+                if c.id not in self._deleted_ids
+            ]
         return [
             self._serialize_campaign(c, is_real=(c.id in self._real_campaigns))
             for c in self._campaigns.values()
+            if c.id not in self._deleted_ids
         ]
+
+    # =========================================================================
+    # AÇÕES DO GERENCIADOR DE ANÚNCIOS (Ativar/Pausar, Orçamento, Duplicar, Excluir)
+    # Na conta real (Graph API) qualquer recusa da Meta é devolvida como erro.
+    # =========================================================================
+
+    def _eh_campanha_real_graph(self, campaign_id: str) -> bool:
+        return bool(self.mode == "graph" and self._access_token and str(campaign_id).isdigit())
+
+    async def _graph_post_ou_erro(self, path: str, data: dict[str, Any]) -> dict[str, Any]:
+        version = os.getenv("META_API_VERSION", "v22.0").strip()
+        async with httpx.AsyncClient(params={"access_token": self._access_token}, timeout=25.0) as client:
+            resp = await client.post(f"{GRAPH_HOST}/{version}/{path}", data=data)
+        if resp.status_code != 200:
+            raise ValueError(f"A Meta recusou a alteração: {self._extrair_erro_meta_detalhado(resp)}")
+        try:
+            return resp.json()
+        except Exception:
+            return {}
+
+    def _camp_local(self, campaign_id: str) -> CampaignItem | None:
+        return self._real_campaigns.get(campaign_id) or self._campaigns.get(campaign_id)
 
     async def update_campaign_status(self, campaign_id: str, status: str) -> dict[str, Any]:
         status_norm = status.upper()
         if status_norm not in {"ACTIVE", "PAUSED"}:
             raise ValueError("Status deve ser ACTIVE ou PAUSED.")
-        if self.mode == "graph" and self._access_token:
-            version = os.getenv("META_API_VERSION", "v22.0").strip()
-            async with httpx.AsyncClient(params={"access_token": self._access_token}, timeout=20.0) as client:
-                resp = await client.post(
-                    f"{GRAPH_HOST}/{version}/{campaign_id}",
-                    data={"status": status_norm},
-                )
-                resp.raise_for_status()
-        camp = self._real_campaigns.get(campaign_id) or self._campaigns.get(campaign_id)
+
+        if self._eh_campanha_real_graph(campaign_id):
+            await self._graph_post_ou_erro(campaign_id, {"status": status_norm})
+            camp = self._camp_local(campaign_id)
+            if camp:
+                camp.status = status_norm
+            return {"id": campaign_id, "status": status_norm, "is_real": True}
+
+        camp = self._camp_local(campaign_id)
         if not camp:
             raise ValueError(f"Campanha '{campaign_id}' não encontrada.")
         camp.status = status_norm
@@ -704,19 +734,76 @@ class MetaAdsHub:
     async def update_campaign_budget(self, campaign_id: str, daily_budget: float) -> dict[str, Any]:
         if daily_budget < 6.0:
             raise ValueError("O orçamento diário mínimo é R$ 6,00.")
-        if self.mode == "graph" and self._access_token:
-            version = os.getenv("META_API_VERSION", "v22.0").strip()
-            async with httpx.AsyncClient(params={"access_token": self._access_token}, timeout=20.0) as client:
-                resp = await client.post(
-                    f"{GRAPH_HOST}/{version}/{campaign_id}",
-                    data={"daily_budget": str(int(round(daily_budget * 100)))},
-                )
-                resp.raise_for_status()
-        camp = self._real_campaigns.get(campaign_id) or self._campaigns.get(campaign_id)
+        novo_orc = round(daily_budget, 2)
+
+        if self._eh_campanha_real_graph(campaign_id):
+            await self._graph_post_ou_erro(campaign_id, {"daily_budget": str(int(round(novo_orc * 100)))})
+            camp = self._camp_local(campaign_id)
+            if camp:
+                camp.daily_budget = novo_orc
+            return {"id": campaign_id, "daily_budget": novo_orc, "is_real": True}
+
+        camp = self._camp_local(campaign_id)
         if not camp:
             raise ValueError(f"Campanha '{campaign_id}' não encontrada.")
-        camp.daily_budget = round(daily_budget, 2)
+        camp.daily_budget = novo_orc
         return self._serialize_campaign(camp, is_real=(campaign_id in self._real_campaigns))
+
+    async def duplicate_campaign(self, campaign_id: str) -> dict[str, Any]:
+        """Duplica a campanha (igual ao botão 'Duplicar' do Gerenciador). Na conta real usa o endpoint
+        oficial /{campaign_id}/copies com deep_copy (campanha + conjuntos + anúncios), sempre PAUSADA."""
+        if self._eh_campanha_real_graph(campaign_id):
+            data = await self._graph_post_ou_erro(
+                f"{campaign_id}/copies",
+                {"deep_copy": "true", "status_option": "PAUSED", "rename_options": '{"rename_suffix": " — Cópia"}'},
+            )
+            novo_id = data.get("copied_campaign_id") or data.get("id")
+            return {"id": novo_id, "origem": campaign_id, "status": "PAUSED", "is_real": True}
+
+        orig = self._camp_local(campaign_id)
+        if not orig:
+            raise ValueError(f"Campanha '{campaign_id}' não encontrada para duplicar.")
+        novo_id = f"camp_{next(self._ids)}"
+        copia = CampaignItem(
+            id=novo_id,
+            name=f"{orig.name} — Cópia",
+            objective=orig.objective,
+            status="PAUSED",
+            daily_budget=orig.daily_budget,
+            budget_type=orig.budget_type,
+            locations=list(orig.locations),
+            created_at=date.today().isoformat(),
+            special_ad_category=orig.special_ad_category,
+        )
+        for ad in orig.ads:
+            copia.ads.append(
+                AdItem(
+                    id=f"ad_{next(self._ids)}",
+                    campaign_id=novo_id,
+                    name=f"{ad.name} — Cópia",
+                    headline=ad.headline,
+                    primary_text=ad.primary_text,
+                    call_to_action=ad.call_to_action,
+                    status="PAUSED",
+                    creative_file=ad.creative_file,
+                )
+            )
+        if campaign_id in self._real_campaigns:
+            self._real_campaigns = {novo_id: copia, **self._real_campaigns}
+        self._campaigns = {novo_id: copia, **self._campaigns}
+        self._insights[novo_id] = self._generate_series(orig.daily_budget, 1.0, "PAUSED")
+        return self._serialize_campaign(copia, is_real=(campaign_id in self._real_campaigns))
+
+    async def delete_campaign(self, campaign_id: str) -> dict[str, Any]:
+        """Exclui a campanha. Na conta real envia status=DELETED na Graph API (mesmo efeito do 'Excluir' do Gerenciador)."""
+        if self._eh_campanha_real_graph(campaign_id):
+            await self._graph_post_ou_erro(campaign_id, {"status": "DELETED"})
+        elif not self._camp_local(campaign_id):
+            raise ValueError(f"Campanha '{campaign_id}' não encontrada.")
+        self._deleted_ids.add(campaign_id)
+        self._real_campaigns.pop(campaign_id, None)
+        self._campaigns.pop(campaign_id, None)
+        return {"deleted": True, "id": campaign_id}
 
     @staticmethod
     def _extrair_erro_meta_detalhado(resp: httpx.Response) -> str:
