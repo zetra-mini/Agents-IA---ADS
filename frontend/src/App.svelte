@@ -52,6 +52,25 @@
   let accountNameInput = $state('');
   let conectandoConta = $state(false);
 
+  // Filtros Avançados estilo Gerenciador de Anúncios Meta
+  let filtroObjetivo = $state('TODOS'); // 'TODOS' | 'LEADS' | 'SALES' | 'TRAFFIC' | 'ENGAGEMENT' | 'AWARENESS'
+  let filtroTipoOrcamento = $state('TODOS'); // 'TODOS' | 'CBO' | 'ABO'
+  let filtroSaude = $state('TODOS'); // 'TODOS' | 'WINNER' | 'BLEEDER' | 'REAL'
+  let filtroPeriodo = $state('7d'); // 'hoje' | 'ontem' | '7d' | '14d' | '30d'
+
+  function limparFiltrosGerenciador() {
+    filtroStatus = 'TODAS';
+    filtroStatusAdset = 'TODAS';
+    filtroStatusAd = 'TODAS';
+    filtroObjetivo = 'TODOS';
+    filtroTipoOrcamento = 'TODOS';
+    filtroSaude = 'TODOS';
+    filtroPeriodo = '7d';
+    buscaCampanha = '';
+    buscaAdset = '';
+    buscaAd = '';
+  }
+
   // Modal de Chaves de API Externa & Motores de IA
   let showApiKeysModal = $state(false);
   let salvandoKeys = $state(false);
@@ -80,13 +99,27 @@
     } else if (filtroStatus === 'PAUSED') {
       lista = lista.filter((c) => c.status === 'PAUSED');
     }
+    if (filtroObjetivo !== 'TODOS') {
+      lista = lista.filter((c) => (c.objective || '').toUpperCase().includes(filtroObjetivo.toUpperCase()));
+    }
+    if (filtroTipoOrcamento !== 'TODOS') {
+      lista = lista.filter((c) => (c.budget_type || '').toUpperCase() === filtroTipoOrcamento.toUpperCase());
+    }
+    if (filtroSaude === 'WINNER') {
+      lista = lista.filter((c) => (c.health_tag || '').includes('WINNER'));
+    } else if (filtroSaude === 'BLEEDER') {
+      lista = lista.filter((c) => (c.health_tag || '').includes('BLEEDER'));
+    } else if (filtroSaude === 'REAL') {
+      lista = lista.filter((c) => c.is_real);
+    }
     if (buscaCampanha.trim()) {
       const termo = buscaCampanha.trim().toLowerCase();
       lista = lista.filter(
         (c) =>
           (c.name || '').toLowerCase().includes(termo) ||
           (c.id || '').toLowerCase().includes(termo) ||
-          (c.objective || '').toLowerCase().includes(termo)
+          (c.objective || '').toLowerCase().includes(termo) ||
+          (c.locations || []).some((l) => l.toLowerCase().includes(termo))
       );
     }
     return lista;
@@ -98,6 +131,9 @@
       lista = lista.filter((a) => a.status === 'ACTIVE');
     } else if (filtroStatusAdset === 'PAUSED') {
       lista = lista.filter((a) => a.status === 'PAUSED');
+    }
+    if (filtroObjetivo !== 'TODOS') {
+      lista = lista.filter((a) => (a.optimization_goal || '').toUpperCase().includes(filtroObjetivo.toUpperCase()));
     }
     if (buscaAdset.trim()) {
       const termo = buscaAdset.trim().toLowerCase();
@@ -826,8 +862,18 @@
         onclick={() => (activeNav = 'dashboard')}
       >
         <span class="nav-icon">📊</span>
-        <span>Dashboard & Campanhas</span>
+        <span>Gerenciador & Campanhas</span>
         <span class="nav-count">{campanhas.length}</span>
+      </button>
+
+      <button
+        type="button"
+        class="nav-item"
+        class:active={activeNav === 'relatorios'}
+        onclick={() => (activeNav = 'relatorios')}
+      >
+        <span class="nav-icon">📈</span>
+        <span>Relatórios & Evolução</span>
       </button>
 
       <button
@@ -994,88 +1040,18 @@
     <!-- CONTEÚDO PRINCIPAL (1 VISÃO LIMPA POR VEZ) -->
     <main class="canvas">
       {#if activeNav === 'dashboard'}
-        <!-- VISÃO 1: DASHBOARD & CAMPANHAS (Estilo octaviosilva2/meta-ads + AdSimples) -->
+        <!-- VISÃO 1: GERENCIADOR DE ANÚNCIOS (TABELA OFICIAL EM 3 NÍVEIS + FILTROS META ADS) -->
         <div class="view-header">
           <div>
-            <h1>Visão Geral & Campanhas</h1>
-            <p>Métricas consolidadas dos últimos 7 dias e controle rápido de orçamento e veiculação.</p>
+            <h1>Gerenciador de Anúncios</h1>
+            <p>Controle oficial de Campanhas, Conjuntos e Anúncios com filtros avançados e sincronização Graph API.</p>
           </div>
-          <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
-            🪄 + Nova Campanha Assistida
-          </button>
+          <div class="view-header-right">
+            <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
+              🪄 + Nova Campanha
+            </button>
+          </div>
         </div>
-
-        {#if copilot}
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">Investimento (7 dias)</div>
-              <div class="stat-value">R$ {copilot.summary_7d.spend_7d.toFixed(2)}</div>
-              <div class="stat-foot">
-                Meta diária: R$ {copilot.pacing.daily_budget_target.toFixed(2)} ·
-                <span class="pace-tag">{copilot.pacing.status}</span>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Conversões / Leads</div>
-              <div class="stat-value">{copilot.summary_7d.conversions_7d}</div>
-              <div class="stat-foot">CPA Médio: R$ {copilot.summary_7d.cpa_7d.toFixed(2)}</div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-label">ROAS Médio</div>
-              <div class="stat-value accent">{copilot.summary_7d.roas_7d.toFixed(2)}x</div>
-              <div class="stat-foot">CTR Médio: {copilot.summary_7d.ctr_7d.toFixed(2)}%</div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Saúde da Conta (IA)</div>
-              <div class="stat-value">
-                🏆 {copilot.winners.length} <span class="stat-sep">/</span> 🩸 {copilot.bleeders.length}
-              </div>
-              <div class="stat-foot">Winners p/ escalar vs. Bleeders</div>
-            </div>
-          </div>
-        {/if}
-
-        <!-- GRÁFICO DE PERFORMANCE LIMPO (Inspirado em octaviosilva2/meta-ads PerformanceChart) -->
-        <section class="panel-card">
-          <div class="panel-head">
-            <h2>Evolução Diária (Últimos 14 dias)</h2>
-            <div class="segmented-mode">
-              <button type="button" class:selected={chartMetric === 'spend'} onclick={() => (chartMetric = 'spend')}>
-                Investimento (R$)
-              </button>
-              <button
-                type="button"
-                class:selected={chartMetric === 'conversions'}
-                onclick={() => (chartMetric = 'conversions')}
-              >
-                Conversões
-              </button>
-              <button type="button" class:selected={chartMetric === 'roas'} onclick={() => (chartMetric = 'roas')}>
-                ROAS
-              </button>
-            </div>
-          </div>
-
-          <div class="chart-bars">
-            {#each serieGrafico as item}
-              {@const val = item[chartMetric]}
-              {@const maxVal = Math.max(...serieGrafico.map((d) => d[chartMetric]), 1)}
-              {@const pct = Math.max(12, Math.round((val / maxVal) * 100))}
-              <div class="bar-col" title={`${item.label}: ${val}`}>
-                <div class="bar-val">
-                  {chartMetric === 'spend' ? `R$${val}` : chartMetric === 'roas' ? `${val}x` : val}
-                </div>
-                <div class="bar-track">
-                  <div class="bar-fill" style="height: {pct}%"></div>
-                </div>
-                <div class="bar-label">{item.label}</div>
-              </div>
-            {/each}
-          </div>
-        </section>
 
         <!-- BARRA DOS 3 NÍVEIS OFICIAIS DO GERENCIADOR DE ANÚNCIOS (CAMPANHAS / CONJUNTOS / ANÚNCIOS) -->
         <div class="meta-manager-level-tabs">
@@ -1145,76 +1121,101 @@
             </div>
           </div>
 
-          <!-- BARRA DE FERRAMENTAS DO GERENCIADOR (FILTROS + BUSCA CONFORME NÍVEL) -->
+          <!-- BARRA DE FERRAMENTAS DO GERENCIADOR (FILTROS COMPLETOS DO GERENCIADOR DE ANÚNCIOS) -->
           <div class="adsmanager-toolbar">
-            {#if activeLevelTab === 'campaigns'}
+            <div class="adsmanager-toolbar-filters">
+              <!-- Filtro 1: Status da Veiculação (Todas, Ativas, Pausadas) -->
               <div class="status-filter-pills">
                 <button
                   type="button"
                   class="filter-pill"
-                  class:active={filtroStatus === 'TODAS'}
-                  onclick={() => (filtroStatus = 'TODAS')}
+                  class:active={(activeLevelTab === 'campaigns' ? filtroStatus : (activeLevelTab === 'adsets' ? filtroStatusAdset : filtroStatusAd)) === 'TODAS'}
+                  onclick={() => {
+                    if (activeLevelTab === 'campaigns') filtroStatus = 'TODAS';
+                    else if (activeLevelTab === 'adsets') filtroStatusAdset = 'TODAS';
+                    else filtroStatusAd = 'TODAS';
+                  }}
                 >
-                  Todas ({campanhas.length})
+                  Todos ({activeLevelTab === 'campaigns' ? campanhas.length : (activeLevelTab === 'adsets' ? adsets.length : ads.length)})
                 </button>
                 <button
                   type="button"
                   class="filter-pill"
-                  class:active={filtroStatus === 'ACTIVE'}
-                  onclick={() => (filtroStatus = 'ACTIVE')}
+                  class:active={(activeLevelTab === 'campaigns' ? filtroStatus : (activeLevelTab === 'adsets' ? filtroStatusAdset : filtroStatusAd)) === 'ACTIVE'}
+                  onclick={() => {
+                    if (activeLevelTab === 'campaigns') filtroStatus = 'ACTIVE';
+                    else if (activeLevelTab === 'adsets') filtroStatusAdset = 'ACTIVE';
+                    else filtroStatusAd = 'ACTIVE';
+                  }}
                 >
-                  🟢 Ativas ({campanhas.filter((c) => c.status === 'ACTIVE').length})
+                  🟢 Ativos
                 </button>
                 <button
                   type="button"
                   class="filter-pill"
-                  class:active={filtroStatus === 'PAUSED'}
-                  onclick={() => (filtroStatus = 'PAUSED')}
+                  class:active={(activeLevelTab === 'campaigns' ? filtroStatus : (activeLevelTab === 'adsets' ? filtroStatusAdset : filtroStatusAd)) === 'PAUSED'}
+                  onclick={() => {
+                    if (activeLevelTab === 'campaigns') filtroStatus = 'PAUSED';
+                    else if (activeLevelTab === 'adsets') filtroStatusAdset = 'PAUSED';
+                    else filtroStatusAd = 'PAUSED';
+                  }}
                 >
-                  ⏸️ Pausadas ({campanhas.filter((c) => c.status === 'PAUSED').length})
+                  ⏸️ Pausados
                 </button>
               </div>
 
-              <div class="search-box">
+              <!-- Filtro 2: Objetivo da Campanha -->
+              <select bind:value={filtroObjetivo} class="filter-select" title="Filtrar por objetivo de veiculação da Meta">
+                <option value="TODOS">🎯 Objetivo: Todos</option>
+                <option value="LEAD">🎯 Cadastros / Leads</option>
+                <option value="SALE">🛒 Vendas / Conversões</option>
+                <option value="TRAFFIC">🌐 Tráfego no Site</option>
+                <option value="ENGAGEMENT">💬 Engajamento / WhatsApp</option>
+                <option value="AWARENESS">📣 Reconhecimento de Marca</option>
+              </select>
+
+              <!-- Filtro 3: Tipo de Orçamento (Advantage+ CBO vs ABO) -->
+              <select bind:value={filtroTipoOrcamento} class="filter-select" title="Estratégia de orçamento">
+                <option value="TODOS">💰 Orçamento: Todos</option>
+                <option value="CBO">Advantage+ (CBO)</option>
+                <option value="ABO">Por Conjunto (ABO)</option>
+              </select>
+
+              <!-- Filtro 4: Desempenho / Saúde da IA -->
+              <select bind:value={filtroSaude} class="filter-select" title="Classificação de saúde da IA">
+                <option value="TODOS">🏷️ Desempenho: Todos</option>
+                <option value="WINNER">🏆 Winners (Escalar)</option>
+                <option value="BLEEDER">🩸 Bleeders (Sangradores)</option>
+                <option value="REAL">🟢 Conta Real</option>
+              </select>
+
+              <!-- Filtro 5: Janela de Atribuição -->
+              <select bind:value={filtroPeriodo} class="filter-select" title="Janela de atribuição">
+                <option value="7d">📅 Últimos 7 dias</option>
+                <option value="14d">📅 Últimos 14 dias</option>
+                <option value="30d">📅 Últimos 30 dias</option>
+                <option value="hoje">📅 Hoje</option>
+                <option value="max">📅 Todo o Período</option>
+              </select>
+
+              {#if filtroStatus !== 'TODAS' || filtroStatusAdset !== 'TODAS' || filtroStatusAd !== 'TODAS' || filtroObjetivo !== 'TODOS' || filtroTipoOrcamento !== 'TODOS' || filtroSaude !== 'TODOS' || buscaCampanha || buscaAdset || buscaAd}
+                <button type="button" class="btn-clear-filters" onclick={limparFiltrosGerenciador} title="Limpar todos os filtros">
+                  ✕ Limpar Filtros
+                </button>
+              {/if}
+            </div>
+
+            <div class="search-box">
+              {#if activeLevelTab === 'campaigns'}
                 <input
                   type="text"
-                  placeholder="🔍 Pesquisar campanha por nome ou ID..."
+                  placeholder="🔍 Pesquisar campanha por nome, ID ou cidade..."
                   bind:value={buscaCampanha}
                 />
                 {#if buscaCampanha}
                   <button type="button" class="search-clear" onclick={() => (buscaCampanha = '')}>✕</button>
                 {/if}
-              </div>
-
-            {:else if activeLevelTab === 'adsets'}
-              <div class="status-filter-pills">
-                <button
-                  type="button"
-                  class="filter-pill"
-                  class:active={filtroStatusAdset === 'TODAS'}
-                  onclick={() => (filtroStatusAdset = 'TODAS')}
-                >
-                  Todos ({adsets.length})
-                </button>
-                <button
-                  type="button"
-                  class="filter-pill"
-                  class:active={filtroStatusAdset === 'ACTIVE'}
-                  onclick={() => (filtroStatusAdset = 'ACTIVE')}
-                >
-                  🟢 Ativos ({adsets.filter((a) => a.status === 'ACTIVE').length})
-                </button>
-                <button
-                  type="button"
-                  class="filter-pill"
-                  class:active={filtroStatusAdset === 'PAUSED'}
-                  onclick={() => (filtroStatusAdset = 'PAUSED')}
-                >
-                  ⏸️ Pausados ({adsets.filter((a) => a.status === 'PAUSED').length})
-                </button>
-              </div>
-
-              <div class="search-box">
+              {:else if activeLevelTab === 'adsets'}
                 <input
                   type="text"
                   placeholder="🔍 Pesquisar conjunto por nome, cidade ou ID..."
@@ -1223,37 +1224,7 @@
                 {#if buscaAdset}
                   <button type="button" class="search-clear" onclick={() => (buscaAdset = '')}>✕</button>
                 {/if}
-              </div>
-
-            {:else}
-              <div class="status-filter-pills">
-                <button
-                  type="button"
-                  class="filter-pill"
-                  class:active={filtroStatusAd === 'TODAS'}
-                  onclick={() => (filtroStatusAd = 'TODAS')}
-                >
-                  Todos ({ads.length})
-                </button>
-                <button
-                  type="button"
-                  class="filter-pill"
-                  class:active={filtroStatusAd === 'ACTIVE'}
-                  onclick={() => (filtroStatusAd = 'ACTIVE')}
-                >
-                  🟢 Ativos ({ads.filter((a) => a.status === 'ACTIVE').length})
-                </button>
-                <button
-                  type="button"
-                  class="filter-pill"
-                  class:active={filtroStatusAd === 'PAUSED'}
-                  onclick={() => (filtroStatusAd = 'PAUSED')}
-                >
-                  ⏸️ Pausados ({ads.filter((a) => a.status === 'PAUSED').length})
-                </button>
-              </div>
-
-              <div class="search-box">
+              {:else}
                 <input
                   type="text"
                   placeholder="🔍 Pesquisar anúncio por título, copy ou ID..."
@@ -1262,8 +1233,8 @@
                 {#if buscaAd}
                   <button type="button" class="search-clear" onclick={() => (buscaAd = '')}>✕</button>
                 {/if}
-              </div>
-            {/if}
+              {/if}
+            </div>
           </div>
 
           <!-- NÍVEL 1: TABELA DE CAMPANHAS -->
@@ -1637,6 +1608,167 @@
             {/if}
           {/if}
         </section>
+
+      {:else if activeNav === 'relatorios'}
+        <!-- VISÃO DEDICADA: RELATÓRIOS & EVOLUÇÃO DIÁRIA (Extraído da Dashboard) -->
+        <div class="view-header">
+          <div>
+            <h1>📈 Relatórios & Performance Diária</h1>
+            <p>Análise consolidada de investimento, pacing diário, conversões, ROAS e curva de evolução dos últimos 14 dias.</p>
+          </div>
+          <div class="view-header-right">
+            <button type="button" class="btn-top ghost" onclick={carregarTudo} title="Atualizar dados analíticos">
+              🔄 Atualizar Dados
+            </button>
+          </div>
+        </div>
+
+        {#if copilot}
+          <!-- CARDS DE MÉTRICAS CONSOLIDADAS -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Investimento (7 dias)</div>
+              <div class="stat-value">R$ {copilot.summary_7d.spend_7d.toFixed(2)}</div>
+              <div class="stat-foot">
+                Meta diária: R$ {copilot.pacing.daily_budget_target.toFixed(2)} ·
+                <span class="pace-tag">{copilot.pacing.status}</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Conversões / Leads</div>
+              <div class="stat-value">{copilot.summary_7d.conversions_7d}</div>
+              <div class="stat-foot">CPA Médio: R$ {copilot.summary_7d.cpa_7d.toFixed(2)}</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">ROAS Médio</div>
+              <div class="stat-value accent">{copilot.summary_7d.roas_7d.toFixed(2)}x</div>
+              <div class="stat-foot">CTR Médio: {copilot.summary_7d.ctr_7d.toFixed(2)}%</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Saúde da Conta (IA)</div>
+              <div class="stat-value">
+                🏆 {copilot.winners.length} <span class="stat-sep">/</span> 🩸 {copilot.bleeders.length}
+              </div>
+              <div class="stat-foot">Winners p/ escalar vs. Bleeders</div>
+            </div>
+          </div>
+        {/if}
+
+        <!-- GRÁFICO DE EVOLUÇÃO DIÁRIA -->
+        <section class="panel-card">
+          <div class="panel-head">
+            <div>
+              <h2>Evolução Diária (Últimos 14 dias)</h2>
+              <span class="panel-sub">Curva diária de desempenho com base nos dados sincronizados da conta.</span>
+            </div>
+            <div class="segmented-mode">
+              <button type="button" class:selected={chartMetric === 'spend'} onclick={() => (chartMetric = 'spend')}>
+                Investimento (R$)
+              </button>
+              <button
+                type="button"
+                class:selected={chartMetric === 'conversions'}
+                onclick={() => (chartMetric = 'conversions')}
+              >
+                Conversões
+              </button>
+              <button type="button" class:selected={chartMetric === 'roas'} onclick={() => (chartMetric = 'roas')}>
+                ROAS
+              </button>
+            </div>
+          </div>
+
+          <div class="chart-bars">
+            {#each serieGrafico as item}
+              {@const val = item[chartMetric]}
+              {@const maxVal = Math.max(...serieGrafico.map((d) => d[chartMetric]), 1)}
+              {@const pct = Math.max(12, Math.round((val / maxVal) * 100))}
+              <div class="bar-col" title={`${item.label}: ${val}`}>
+                <div class="bar-val">
+                  {chartMetric === 'spend' ? `R$${val}` : chartMetric === 'roas' ? `${val}x` : val}
+                </div>
+                <div class="bar-track">
+                  <div class="bar-fill" style="height: {pct}%"></div>
+                </div>
+                <div class="bar-label">{item.label}</div>
+              </div>
+            {/each}
+          </div>
+        </section>
+
+        <!-- TABELA ANALÍTICA DIA A DIA -->
+        <section class="panel-card">
+          <div class="panel-head">
+            <div>
+              <h2>Detalhamento Diário Analítico</h2>
+              <span class="panel-sub">Registro histórico de cada dia com valor investido, conversões apuradas e retorno.</span>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table class="clean-table ads-manager-table">
+              <thead>
+                <tr>
+                  <th>Dia / Janela</th>
+                  <th class="num">Investimento</th>
+                  <th class="num">Conversões</th>
+                  <th class="num">CPA Estimado</th>
+                  <th class="num">ROAS</th>
+                  <th>Status do Ritmo (Pacing)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each serieGrafico as item}
+                  {@const cpaDia = item.conversions ? (item.spend / item.conversions).toFixed(2) : '0.00'}
+                  <tr>
+                    <td>
+                      <strong>{item.label}</strong>
+                      <div class="c-sub">Janela de atribuição 7d clique / 1d visualização</div>
+                    </td>
+                    <td class="num"><strong>R$ {item.spend.toFixed(2)}</strong></td>
+                    <td class="num">{item.conversions}</td>
+                    <td class="num">R$ {cpaDia}</td>
+                    <td class="num strong-roas">{item.roas}x</td>
+                    <td>
+                      <span class="health-pill success">🟢 Em conformidade</span>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ALERTAS DE FADIGA E RECOMENDAÇÕES DE OTIMIZAÇÃO -->
+        {#if copilot && copilot.fatigue_alerts && copilot.fatigue_alerts.length > 0}
+          <section class="panel-card" style="margin-top: 20px;">
+            <div class="panel-head">
+              <div>
+                <h2>⚠️ Alertas de Fadiga Criativa Detectados</h2>
+                <span class="panel-sub">Campanhas com queda de CTR superior a 20% nos últimos 7 dias.</span>
+              </div>
+            </div>
+            <div class="fatigue-list">
+              {#each copilot.fatigue_alerts as fat}
+                <div class="fatigue-card">
+                  <div class="fatigue-head">
+                    <strong>{fat.campaign_name}</strong>
+                    <span class="fatigue-tag">Queda de CTR: -{fat.drop_pct}%</span>
+                  </div>
+                  <div class="c-sub" style="margin-top: 4px;">
+                    CTR Inicial: {fat.start_ctr}% → CTR Atual: {fat.end_ctr}%
+                  </div>
+                  <div class="c-sub" style="color: #38bdf8; margin-top: 6px;">
+                    💡 Ação recomendada: {fat.acao_sugerida}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </section>
+        {/if}
 
       {:else if activeNav === 'assistida'}
         <!-- VISÃO 2: CRIAÇÃO DE CAMPANHA ASSISTIDA (4 Etapas + Preview Ao Vivo do Anúncio) -->
@@ -4632,5 +4764,89 @@
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.4px;
+  }
+
+  /* FILTROS AVANÇADOS DO GERENCIADOR DE ANÚNCIOS */
+  .adsmanager-toolbar-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+
+  .filter-select {
+    padding: 7px 11px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: #cbd5e1;
+    font-size: 0.79rem;
+    font-weight: 550;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .filter-select:hover,
+  .filter-select:focus {
+    border-color: var(--primary);
+    color: #fff;
+    background: #1e293b;
+  }
+
+  .btn-clear-filters {
+    padding: 6px 12px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 8px;
+    color: #f87171;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-clear-filters:hover {
+    background: rgba(239, 68, 68, 0.25);
+    color: #fff;
+  }
+
+  /* LISTA DE ALERTAS DE FADIGA CRIATIVA */
+  .fatigue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .fatigue-card {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+
+  .fatigue-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .fatigue-head strong {
+    color: #fff;
+    font-size: 0.88rem;
+  }
+
+  .fatigue-tag {
+    padding: 2px 8px;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
   }
 </style>
