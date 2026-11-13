@@ -1,0 +1,42 @@
+services:
+  meta-ads-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meta-ads-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - CREATIVES_DIR=/app/criativos
+      - BROWSER_USER_DATA_DIR=/app/browser_profile
+    # Chromium exige memória compartilhada maior para evitar crashes de aba em Docker
+    shm_size: "2gb"
+    volumes:
+      # Persiste cookies/sessão autenticada do Gerenciador de Anúncios entre reinícios
+      - ./browser_profile:/app/browser_profile
+      # Monta a pasta local de criativos dentro do container (configurável no .env via HOST_CREATIVES_DIR)
+      - ${HOST_CREATIVES_DIR:-./criativos}:/app/criativos
+    extra_hosts:
+      # Permite acessar Ollama ou OpenCode rodando no host Windows/Linux
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: meta-ads-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      meta-ads-api:
+        condition: service_healthy
+    restart: unless-stopped

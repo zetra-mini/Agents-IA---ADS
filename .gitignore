@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Segredos e dados locais persistentes
+.env
+browser_profile/
+criativos/*
+!criativos/README.md
+
+# Ferramentas locais / SO
+.agents/
+.DS_Store
+Thumbs.db

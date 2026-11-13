@@ -1,0 +1,14 @@
+# Versões resolvidas e validadas em conjunto para Python 3.11 (Linux x86_64)
+# Compatibilidade garantida entre pydantic 2.12.x, mcp 1.x, crewai e browser-use
+fastapi==0.162.6
+uvicorn[standard]==0.54.0
+pydantic==2.12.5
+pydantic-settings==2.16.3
+python-dotenv==1.2.4
+playwright==1.65.1
+crewai[litellm]==1.15.41
+litellm==1.105.3
+browser-use==0.11.13
+anthropic==0.125.0
+openai==2.54.0
+google-genai==1.75.0
