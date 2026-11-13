@@ -8,7 +8,53 @@
   } = $props();
 
   let subTab = $state('geradores'); // 'brain' | 'geradores' | 'score_steal' | 'pipeboard_mcp' | 'benchmarks'
+  let showHamburgerModal = $state(false);
   let carregando = $state(false);
+
+  const MODULOS_OAK = [
+    {
+      id: 'geradores',
+      icone: '✍️',
+      curto: 'Geradores & Reels',
+      titulo: '18 Geradores & Wizard 10-Min',
+      desc: '3 variantes Meta Ads (Dor, Desejo, Prova Social), 6 roteiros de Reels (10 ganchos) e Kit WhatsApp + Google.',
+      badge: '18 Tools',
+    },
+    {
+      id: 'brain',
+      icone: '🧠',
+      curto: 'Cérebro da Marca',
+      titulo: 'Cérebro da Marca (Brand Brain & URL)',
+      desc: 'Auto-extrator de site por URL e 8 templates brasileiros prontos para calibrar toda a IA.',
+      badge: 'Auto-URL',
+    },
+    {
+      id: 'score_steal',
+      icone: '🎯',
+      curto: 'Score & Espionagem',
+      titulo: 'Creative Score (5 Alavancas) & Steal & Beat',
+      desc: 'Nota de 0 a 10 para seu anúncio + engenharia reversa para superar anúncios de concorrentes.',
+      badge: '11 Otimizadores',
+    },
+    {
+      id: 'pipeboard_mcp',
+      icone: '🔌',
+      curto: 'Pipeboard MCP',
+      titulo: 'Pipeboard Meta Ads MCP (Graph API)',
+      desc: 'Busca oficial de interesses (IDs reais), cidades/regiões e páginas via Meta Graph API.',
+      badge: '42 MCP Tools',
+    },
+    {
+      id: 'benchmarks',
+      icone: '📚',
+      curto: 'Benchmarks & Copy',
+      titulo: 'Benchmarks Brasil & Escola de Copy',
+      desc: 'Métricas de CTR/CPC/CPM/ROAS 2025/2026 no Brasil e frameworks PAS, AIDA, BAB, 4 U’s e Schwartz.',
+      badge: 'Guia PT-BR',
+    },
+  ];
+
+  let moduloAtivoInfo = $derived(MODULOS_OAK.find((m) => m.id === subTab) || MODULOS_OAK[0]);
 
   // Estado do Hub OpenAdKit + Pipeboard MCP
   let activeBrain = $state({
@@ -307,45 +353,125 @@
 </script>
 
 <div class="oak-wrap">
-  <!-- CABEÇALHO DO HUB UNIFICADO EM PORTUGUÊS-BR -->
-  <div class="oak-hero">
-    <div>
-      <div class="oak-badges">
-        <span class="badge-pill gold">🧰 OpenAdKit v1.1 PT-BR</span>
-        <span class="badge-pill blue">🔌 Pipeboard Meta Ads MCP (42 Tools)</span>
-        <span class="badge-pill green">100% Português do Brasil</span>
+  <!-- BARRA SUPERIOR COMPACTA + BOTÃO DE MODAL HAMBÚRGUER (☰) -->
+  <div class="oak-compact-header">
+    <div class="oak-compact-left">
+      <button
+        type="button"
+        class="btn-hamburger-oak"
+        onclick={() => (showHamburgerModal = true)}
+        title="Abrir Catálogo Completo OpenAdKit & Pipeboard MCP"
+      >
+        <span class="ham-lines">☰</span>
+        <span>Menu & Ferramentas</span>
+        <span class="ham-count">5 Suítes</span>
+      </button>
+
+      <div class="oak-active-title">
+        <span class="oak-mod-icon">{moduloAtivoInfo.icone}</span>
+        <div>
+          <div class="oak-mod-name">
+            {moduloAtivoInfo.titulo}
+            <span class="oak-mini-badge">{moduloAtivoInfo.badge}</span>
+          </div>
+          <div class="oak-mod-sub">{moduloAtivoInfo.desc}</div>
+        </div>
       </div>
-      <h1>Central OpenAdKit & Pipeboard Meta Ads MCP</h1>
-      <p>
-        18 Geradores de Anúncios · 11 Otimizadores · Cérebro da Marca (Brand Brain) · Creative Score 5 Alavancas · Espionagem Steal & Beat · Segmentação Oficial da Meta Graph API.
-      </p>
     </div>
 
-    <div class="active-brand-pill">
-      <span>🧠 Marca Ativa:</span>
-      <strong>{activeBrain.business_name}</strong>
-      <small>({activeBrain.service_area || 'Brasil'})</small>
+    <div class="oak-compact-right">
+      <!-- NAVEGAÇÃO RÁPIDA EM 1 LINHA -->
+      <div class="oak-inline-pills">
+        {#each MODULOS_OAK as m}
+          <button
+            type="button"
+            class:active={subTab === m.id}
+            onclick={() => (subTab = m.id)}
+            title={m.titulo}
+          >
+            <span>{m.icone}</span>
+            <span>{m.curto}</span>
+          </button>
+        {/each}
+      </div>
+
+      <button
+        type="button"
+        class="brand-compact-btn"
+        onclick={() => (subTab = 'brain')}
+        title="Clique para trocar ou editar o Cérebro da Marca"
+      >
+        <span>🧠</span>
+        <span class="brand-compact-name">{activeBrain.business_name}</span>
+      </button>
     </div>
   </div>
 
-  <!-- NAVEGAÇÃO INTERNA DAS 5 SUÍTES -->
-  <div class="oak-tabs">
-    <button type="button" class:active={subTab === 'geradores'} onclick={() => (subTab = 'geradores')}>
-      ✍️ 18 Geradores & Wizard 10-Min
-    </button>
-    <button type="button" class:active={subTab === 'brain'} onclick={() => (subTab = 'brain')}>
-      🧠 Cérebro da Marca (Extrator URL)
-    </button>
-    <button type="button" class:active={subTab === 'score_steal'} onclick={() => (subTab = 'score_steal')}>
-      🎯 Creative Score & Espionagem
-    </button>
-    <button type="button" class:active={subTab === 'pipeboard_mcp'} onclick={() => (subTab = 'pipeboard_mcp')}>
-      🔌 Pipeboard Meta Ads MCP (Graph API)
-    </button>
-    <button type="button" class:active={subTab === 'benchmarks'} onclick={() => (subTab = 'benchmarks')}>
-      📚 Benchmarks & Escola de Copy (PAS/AIDA)
-    </button>
-  </div>
+  <!-- MODAL HAMBÚRGUER: CENTRAL OPENADKIT v1.1 PT-BR & PIPEBOARD META ADS MCP -->
+  {#if showHamburgerModal}
+    <div class="oak-modal-backdrop" role="presentation" onclick={() => (showHamburgerModal = false)}>
+      <div class="oak-modal-drawer" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && (showHamburgerModal = false)}>
+        <div class="oak-modal-head">
+          <div>
+            <div class="oak-badges">
+              <span class="badge-pill gold">🧰 OpenAdKit v1.1 PT-BR</span>
+              <span class="badge-pill blue">🔌 Pipeboard Meta Ads MCP (42 Tools)</span>
+              <span class="badge-pill green">100% Português do Brasil</span>
+            </div>
+            <h3>Central OpenAdKit & Pipeboard Meta Ads MCP</h3>
+            <p>
+              18 Geradores de Anúncios · 11 Otimizadores · Cérebro da Marca (Brand Brain) · Creative Score 5 Alavancas · Espionagem Steal & Beat · Segmentação Oficial da Meta Graph API.
+            </p>
+          </div>
+          <button type="button" class="oak-modal-close" onclick={() => (showHamburgerModal = false)}>✕</button>
+        </div>
+
+        <div class="oak-modal-section-title">Selecione a Ferramenta / Módulo</div>
+        <div class="oak-modal-grid">
+          {#each MODULOS_OAK as m}
+            <button
+              type="button"
+              class="oak-modal-item"
+              class:selected={subTab === m.id}
+              onclick={() => {
+                subTab = m.id;
+                showHamburgerModal = false;
+              }}
+            >
+              <div class="oak-mi-top">
+                <span class="oak-mi-icon">{m.icone}</span>
+                <strong>{m.titulo}</strong>
+                <span class="oak-mi-badge">{m.badge}</span>
+              </div>
+              <p>{m.desc}</p>
+            </button>
+          {/each}
+        </div>
+
+        <div class="oak-modal-brand-bar">
+          <div>
+            <span>🧠 Marca Ativa no Cérebro:</span>
+            <strong>{activeBrain.business_name}</strong>
+            <small>({activeBrain.service_area || 'Brasil'})</small>
+          </div>
+          <div class="oak-modal-tpl-chips">
+            {#each templates.slice(0, 4) as tpl}
+              <button
+                type="button"
+                class="tpl-quick-chip"
+                onclick={() => {
+                  aplicarTemplateIndustria(tpl.slug);
+                  showHamburgerModal = false;
+                }}
+              >
+                {tpl.emoji} {tpl.nome}
+              </button>
+            {/each}
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if subTab === 'geradores'}
     <!-- ABA 1: 18 GERADORES DE ANÚNCIOS, REELS (10 HOOKS) & WIZARD 10 MINUTOS -->
@@ -835,32 +961,338 @@
   .oak-wrap {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 14px;
   }
 
-  .oak-hero {
+  .oak-compact-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    flex-wrap: wrap;
+  }
+
+  .oak-compact-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .btn-hamburger-oak {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff;
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    transition: all 0.15s;
+  }
+
+  .btn-hamburger-oak:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+  }
+
+  .ham-lines {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
+  .ham-count {
+    background: rgba(255, 255, 255, 0.18);
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.67rem;
+  }
+
+  .oak-active-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+
+  .oak-mod-icon {
+    font-size: 1.15rem;
+  }
+
+  .oak-mod-name {
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .oak-mini-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.18);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+  }
+
+  .oak-mod-sub {
+    font-size: 0.72rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 390px;
+  }
+
+  .oak-compact-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .oak-inline-pills {
+    display: inline-flex;
+    background: #0b0e14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+
+  .oak-inline-pills button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-size: 0.73rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.12s;
+  }
+
+  .oak-inline-pills button:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .oak-inline-pills button.active {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  .brand-compact-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .brand-compact-name {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* MODAL HAMBÚRGUER */
+  .oak-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 7, 18, 0.78);
+    backdrop-filter: blur(5px);
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+  }
+
+  .oak-modal-drawer {
+    width: 100%;
+    max-width: 720px;
+    background: #0f1420;
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .oak-modal-head {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 16px;
-    padding: 18px 20px;
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(16, 185, 129, 0.08));
-    border: 1px solid rgba(59, 130, 246, 0.32);
-    border-radius: 12px;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .oak-modal-head h3 {
+    margin: 4px 0 4px;
+    font-size: 1.1rem;
+    font-weight: 800;
+  }
+
+  .oak-modal-head p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .oak-modal-close {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .oak-modal-section-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .oak-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  @media (max-width: 680px) {
+    .oak-modal-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .oak-modal-item {
+    background: #0b0e14;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: left;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    transition: all 0.14s;
+  }
+
+  .oak-modal-item:hover {
+    border-color: var(--primary-light);
+    background: rgba(37, 99, 235, 0.08);
+  }
+
+  .oak-modal-item.selected {
+    border-color: #3b82f6;
+    background: rgba(37, 99, 235, 0.16);
+  }
+
+  .oak-mi-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.83rem;
+  }
+
+  .oak-mi-icon {
+    font-size: 1rem;
+  }
+
+  .oak-mi-badge {
+    margin-left: auto;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+  }
+
+  .oak-modal-item p {
+    margin: 0;
+    font-size: 0.74rem;
+    color: var(--muted);
+    line-height: 1.35;
+  }
+
+  .oak-modal-brand-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 0.76rem;
     flex-wrap: wrap;
+  }
+
+  .oak-modal-tpl-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .tpl-quick-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tpl-quick-chip:hover {
+    border-color: #3b82f6;
+    color: #fff;
   }
 
   .oak-badges {
     display: flex;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     flex-wrap: wrap;
   }
 
   .badge-pill {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 800;
-    padding: 3px 9px;
+    padding: 2px 8px;
     border-radius: 999px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -882,53 +1314,6 @@
     background: rgba(16, 185, 129, 0.2);
     color: #6ee7b7;
     border: 1px solid rgba(16, 185, 129, 0.4);
-  }
-
-  .oak-hero h1 {
-    margin: 0;
-    font-size: 1.3rem;
-    font-weight: 800;
-  }
-
-  .oak-hero p {
-    margin: 4px 0 0;
-    font-size: 0.83rem;
-    color: var(--muted);
-  }
-
-  .active-brand-pill {
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid var(--border-strong);
-    padding: 10px 14px;
-    border-radius: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 0.78rem;
-  }
-
-  .oak-tabs {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .oak-tabs button {
-    background: var(--surface);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    padding: 9px 14px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .oak-tabs button.active {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary-light);
   }
 
   .oak-grid-2 {

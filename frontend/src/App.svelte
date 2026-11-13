@@ -36,6 +36,7 @@
 
   // Modal de Conexão da Conta Real
   let showConnectModal = $state(false);
+  let showNavHamburgerModal = $state(false);
   let tokenInput = $state('');
   let accountIdInput = $state('');
   let accountNameInput = $state('');
@@ -584,10 +585,18 @@
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-logo">∞</div>
-      <div>
+      <div class="brand-titles">
         <div class="brand-name">AdSimples AI</div>
         <div class="brand-sub">Meta Ads Copilot</div>
       </div>
+      <button
+        type="button"
+        class="btn-sidebar-ham"
+        onclick={() => (showNavHamburgerModal = true)}
+        title="Abrir Menu Hambúrguer Geral"
+      >
+        ☰
+      </button>
     </div>
 
     <nav class="nav-list">
@@ -648,60 +657,71 @@
       </button>
     </nav>
 
+    <!-- MOTOR DE IA FIXO BEM NO CANTO INFERIOR ESQUERDO DA TELA -->
     <div class="sidebar-footer">
-      <div class="engine-box">
-        <div class="engine-head">
-          <label for="ai-engine-sel">Motor de IA Ativo</label>
-          <span class="engine-status-pill" class:ready={activeProviderMeta?.configured}>
-            {activeProviderMeta?.configured ? '🟢 Pronto' : '🔑 Sem Chave'}
+      <div class="engine-compact-dock">
+        <div class="engine-head-mini">
+          <span class="engine-dot-status" class:ready={activeProviderMeta?.configured}></span>
+          <label for="ai-engine-sel">Motor IA</label>
+          <span class="api-mini-tag" class:online={apiOnline}>
+            {apiOnline ? '8010 ON' : 'OFF'}
           </span>
         </div>
-        <select id="ai-engine-sel" value={selectedProvider} onchange={aoSelecionarMotorIA}>
-          {#if providers.length === 0}
-            <option value="ollama">Ollama Local (qwen2.5)</option>
-            <option value="opencode">OpenCode CLI</option>
-            <option value="anthropic">Anthropic Claude</option>
-            <option value="openai">OpenAI GPT-4o</option>
-            <option value="google">Google Gemini</option>
-          {:else}
-            {#each providers as p}
-              <option value={p.id}>
-                {p.label} {p.requires_api_key ? (p.configured ? '✓' : '🔒') : ''}
-              </option>
-            {/each}
-          {/if}
-        </select>
 
-        <button type="button" class="btn-config-keys" onclick={() => (showApiKeysModal = true)}>
-          🔑 Configurar Chaves API
-        </button>
-      </div>
+        <div class="engine-inline-row">
+          <select id="ai-engine-sel" value={selectedProvider} onchange={aoSelecionarMotorIA}>
+            {#if providers.length === 0}
+              <option value="opencode">OpenCode CLI</option>
+              <option value="ollama">Ollama Local</option>
+              <option value="anthropic">Claude Sonnet</option>
+              <option value="openai">OpenAI GPT-4o</option>
+              <option value="google">Google Gemini</option>
+            {:else}
+              {#each providers as p}
+                <option value={p.id}>
+                  {p.label.split('(')[0].trim()} {p.requires_api_key ? (p.configured ? '✓' : '🔒') : ''}
+                </option>
+              {/each}
+            {/if}
+          </select>
 
-      <div class="api-status">
-        <span class="status-dot" class:online={apiOnline}></span>
-        <span>{apiOnline ? 'Backend Online · 8010' : 'Backend Offline'}</span>
+          <button
+            type="button"
+            class="btn-key-icon"
+            onclick={() => (showApiKeysModal = true)}
+            title="Configurar Chaves de API Externa & Motores de IA"
+          >
+            🔑
+          </button>
+        </div>
       </div>
     </div>
   </aside>
 
   <!-- 2. ÁREA CENTRAL DE TRABALHO -->
   <div class="workspace">
-    <!-- BARRA SUPERIOR: CONTA DE ANÚNCIOS REAL & GERENCIADOR -->
+    <!-- BARRA SUPERIOR: CONTA DE ANÚNCIOS REAL & GERENCIADOR (COMPACTA EM 1 LINHA) -->
     <header class="topbar">
       <div class="account-status">
+        <button
+          type="button"
+          class="btn-top-ham"
+          onclick={() => (showNavHamburgerModal = true)}
+          title="Menu Rápido & Ferramentas (☰)"
+        >
+          ☰
+        </button>
         <span class="conn-indicator" class:connected={connection.connected}></span>
-        <div>
-          <div class="acc-headline">
-            {#if connection.connected}
-              Gerenciador: <strong>{connection.business_name}</strong>
-              <span class="sep">·</span>
-              Conta: <strong>{connection.selected_account_name || 'Meta Ads'}</strong>
-              <code class="act-pill">{connection.selected_account_id}</code>
-            {:else}
-              Gerenciador: <strong>Não conectado</strong>
-              <span class="muted-hint">(Sem Conta Real vinculada)</span>
-            {/if}
-          </div>
+        <div class="acc-headline">
+          {#if connection.connected}
+            <span>BM: <strong>{connection.business_name}</strong></span>
+            <span class="sep">·</span>
+            <span>Conta: <strong>{connection.selected_account_name || 'Meta Ads'}</strong></span>
+            <code class="act-pill">{connection.selected_account_id}</code>
+          {:else}
+            Gerenciador: <strong>Não conectado</strong>
+            <span class="muted-hint">(Sem Conta Real)</span>
+          {/if}
         </div>
       </div>
 
@@ -710,7 +730,7 @@
           <select class="top-select" value={connection.selected_account_id} onchange={trocarContaAtiva}>
             {#each connection.available_accounts as acc}
               <option value={acc.id}>
-                {acc.account_status === 1 ? '🟢 Ativa' : '⚠️ Pendente'} · {acc.name} ({acc.id})
+                {acc.account_status === 1 ? '🟢' : '⚠️'} {acc.name} ({acc.id})
               </option>
             {/each}
           </select>
@@ -734,11 +754,11 @@
         </div>
 
         <button type="button" class="btn-top ghost" onclick={sincronizarDoNavegador} disabled={conectandoConta}>
-          🌐 Sincronizar Navegador
+          🌐 Sincronizar
         </button>
 
         <button type="button" class="btn-top primary" onclick={() => (showConnectModal = true)}>
-          🔗 {connection.connected ? 'Conta / Token' : 'Conectar Conta Meta'}
+          🔗 {connection.connected ? 'Conta / Token' : 'Conectar Meta'}
         </button>
       </div>
     </header>
@@ -1655,10 +1675,111 @@
   </div>
 {/if}
 
+<!-- MODAL HAMBÚRGUER GLOBAL DE NAVEGAÇÃO RÁPIDA & FERRAMENTAS (☰) -->
+{#if showNavHamburgerModal}
+  <div class="modal-backdrop" role="presentation" onclick={() => (showNavHamburgerModal = false)}>
+    <div
+      class="modal-card modal-wide"
+      role="dialog"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.key === 'Escape' && (showNavHamburgerModal = false)}
+    >
+      <div class="modal-head">
+        <h3>☰ Central de Navegação & Ferramentas (AdSimples · OpenAdKit · Pipeboard MCP)</h3>
+        <button type="button" class="modal-close" onclick={() => (showNavHamburgerModal = false)}>✕</button>
+      </div>
+      <p class="modal-desc">
+        Acesse qualquer módulo do sistema, configure suas chaves de IA ou sincronize sua conta real do Meta Ads em 1 clique.
+      </p>
+
+      <div class="ham-nav-grid">
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'dashboard'}
+          onclick={() => {
+            activeNav = 'dashboard';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>📊 Dashboard & Campanhas ({campanhas.length})</strong>
+          <span>Métricas reais dos últimos 7 dias, gráfico diário e ativação/pausa de campanhas.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'assistida'}
+          onclick={() => {
+            activeNav = 'assistida';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>🪄 Criação de Campanha Assistida (4 Etapas)</strong>
+          <span>Suba seu criativo (vídeo/imagem), revise público + copy e publique na sua conta Meta Ads.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'openadkit'}
+          onclick={() => {
+            activeNav = 'openadkit';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>🧰 Central OpenAdKit & Pipeboard MCP (PT-BR)</strong>
+          <span>18 Geradores de Anúncios, Cérebro da Marca (URL), Creative Score, Steal & Beat e 42 MCP Tools.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'robo'}
+          onclick={() => {
+            activeNav = 'robo';
+            showNavHamburgerModal = false;
+          }}
+        >
+          <strong>🤖 Robô Otimizador & Loja de Públicos</strong>
+          <span>Escala automática de Winners, pausa de Bleeders e públicos prontos estilo AdSimples.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          class:active={activeNav === 'automacao'}
+          onclick={() => {
+            activeNav = 'automacao';
+            showNavHamburgerModal = false;
+            setTimeout(() => simuladorRef?.iniciarDemonstracaoVisual(), 80);
+          }}
+        >
+          <strong>🖱️ Automação Visual IA no Gerenciador</strong>
+          <span>Veja o cursor da IA preenchendo campanha, conjunto e criativo em tempo real.</span>
+        </button>
+
+        <button
+          type="button"
+          class="ham-nav-card"
+          onclick={() => {
+            showNavHamburgerModal = false;
+            showApiKeysModal = true;
+          }}
+        >
+          <strong>🔑 Motor de IA & Chaves de API Externa</strong>
+          <span>Troque entre OpenCode, Ollama Local, OpenAI GPT-4o, Claude Sonnet e Google Gemini.</span>
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .app-shell {
     display: grid;
-    grid-template-columns: 236px minmax(0, 1fr) 340px;
+    grid-template-columns: 224px minmax(0, 1fr) 330px;
     height: 100vh;
     max-height: 100vh;
     overflow: hidden;
@@ -1667,7 +1788,7 @@
 
   @media (max-width: 1180px) {
     .app-shell {
-      grid-template-columns: 210px minmax(0, 1fr);
+      grid-template-columns: 206px minmax(0, 1fr);
     }
     .chat-dock {
       display: none;
@@ -1678,11 +1799,11 @@
   .sidebar {
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border);
-    padding: 20px 14px;
+    padding: 14px 12px 12px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    gap: 16px;
+    gap: 10px;
     height: 100vh;
     overflow-y: auto;
   }
@@ -1690,52 +1811,80 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 11px;
-    padding: 4px 8px 20px;
+    gap: 9px;
+    padding: 2px 6px 12px;
     border-bottom: 1px solid var(--border);
   }
 
+  .brand-titles {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .btn-sidebar-ham,
+  .btn-top-ham {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    font-size: 0.9rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .btn-sidebar-ham:hover,
+  .btn-top-ham:hover {
+    color: #fff;
+    border-color: var(--primary-light);
+    background: rgba(37, 99, 235, 0.18);
+  }
+
   .brand-logo {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
     background: linear-gradient(135deg, #2563eb, #06b6d4);
     display: grid;
     place-items: center;
     font-weight: 900;
-    font-size: 18px;
+    font-size: 16px;
     color: #fff;
+    flex-shrink: 0;
   }
 
   .brand-name {
     font-weight: 800;
-    font-size: 0.96rem;
+    font-size: 0.9rem;
     letter-spacing: -0.01em;
   }
 
   .brand-sub {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     color: var(--muted);
   }
 
   .nav-list {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    margin-top: 4px;
+    gap: 4px;
+    margin-top: 2px;
   }
 
   .nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 9px;
+    padding: 8px 10px;
+    border-radius: 8px;
     border: 1px solid transparent;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 0.84rem;
+    font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
     text-align: left;
@@ -1754,105 +1903,153 @@
   }
 
   .nav-icon {
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
 
   .nav-count,
   .nav-badge {
     margin-left: auto;
-    font-size: 0.68rem;
+    font-size: 0.64rem;
     font-weight: 700;
-    padding: 2px 7px;
+    padding: 1px 6px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.07);
     color: var(--text-secondary);
   }
 
+  /* MOTOR DE IA FIXO BEM NO CANTO INFERIOR ESQUERDO DA TELA */
   .sidebar-footer {
+    margin-top: auto;
+    padding-top: 10px;
     border-top: 1px solid var(--border);
-    padding-top: 14px;
+  }
+
+  .engine-compact-dock {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    padding: 8px 9px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
   }
 
-  .engine-head {
+  .engine-head-mini {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 4px;
+    gap: 6px;
   }
 
-  .engine-box label {
-    display: block;
-    font-size: 0.7rem;
-    color: var(--muted);
+  .engine-dot-status {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+  }
+
+  .engine-dot-status.ready {
+    background: #10b981;
+    box-shadow: 0 0 6px #10b981;
+  }
+
+  .engine-head-mini label {
+    font-size: 0.66rem;
+    font-weight: 800;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin: 0;
   }
 
-  .engine-status-pill {
-    font-size: 0.65rem;
+  .api-mini-tag {
+    margin-left: auto;
+    font-size: 0.61rem;
     font-weight: 700;
-    padding: 1px 6px;
+    padding: 1px 5px;
     border-radius: 999px;
-    background: rgba(245, 158, 11, 0.16);
-    color: #fbbf24;
+    background: rgba(239, 68, 68, 0.16);
+    color: #fca5a5;
   }
 
-  .engine-status-pill.ready {
-    background: rgba(16, 185, 129, 0.16);
-    color: #34d399;
+  .api-mini-tag.online {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
   }
 
-  .engine-box select {
-    width: 100%;
-    background: var(--surface);
+  .engine-inline-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .engine-inline-row select {
+    flex: 1;
+    min-width: 0;
+    background: #0b0e14;
     color: var(--text);
     border: 1px solid var(--border-strong);
-    border-radius: 7px;
-    padding: 6px 8px;
-    font-size: 0.78rem;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 0.73rem;
+    font-weight: 600;
   }
 
-  .btn-config-keys {
-    margin-top: 6px;
-    width: 100%;
-    padding: 6px 8px;
-    border-radius: 7px;
-    border: 1px solid rgba(59, 130, 246, 0.35);
-    background: rgba(37, 99, 235, 0.14);
+  .btn-key-icon {
+    background: rgba(37, 99, 235, 0.18);
+    border: 1px solid rgba(59, 130, 246, 0.4);
     color: #93c5fd;
-    font-size: 0.75rem;
-    font-weight: 700;
+    border-radius: 6px;
+    width: 27px;
+    height: 27px;
+    display: grid;
+    place-items: center;
+    font-size: 0.78rem;
     cursor: pointer;
-    transition: all 0.15s;
+    flex-shrink: 0;
+    transition: all 0.14s;
   }
 
-  .btn-config-keys:hover {
-    background: rgba(37, 99, 235, 0.25);
+  .btn-key-icon:hover {
+    background: var(--primary);
     color: #fff;
   }
 
-  .api-status {
+  .ham-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .ham-nav-card {
+    background: #0b0e14;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: left;
+    color: var(--text);
+    cursor: pointer;
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
+    transition: all 0.14s;
+  }
+
+  .ham-nav-card:hover,
+  .ham-nav-card.active {
+    border-color: #3b82f6;
+    background: rgba(37, 99, 235, 0.14);
+  }
+
+  .ham-nav-card strong {
+    font-size: 0.84rem;
+    color: #fff;
+  }
+
+  .ham-nav-card span {
     font-size: 0.74rem;
     color: var(--muted);
-  }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--danger);
-  }
-
-  .status-dot.online {
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
+    line-height: 1.35;
   }
 
   /* WORKSPACE CENTRAL */
@@ -1868,8 +2065,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    padding: 12px 24px;
+    gap: 10px;
+    padding: 8px 18px;
     background: var(--bg-sidebar);
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
@@ -1878,14 +2075,16 @@
   .account-status {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    min-width: 0;
   }
 
   .conn-indicator {
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: #f59e0b;
+    flex-shrink: 0;
   }
 
   .conn-indicator.connected {
@@ -1894,8 +2093,11 @@
   }
 
   .acc-headline {
-    font-size: 0.82rem;
+    font-size: 0.77rem;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .acc-headline strong {
@@ -1903,30 +2105,30 @@
   }
 
   .sep {
-    margin: 0 6px;
+    margin: 0 5px;
     color: var(--muted);
   }
 
   .muted-hint {
     color: var(--muted);
-    font-size: 0.76rem;
+    font-size: 0.73rem;
     margin-left: 4px;
   }
 
   .act-pill {
     background: var(--surface-elevated);
     color: #38bdf8;
-    padding: 2px 6px;
+    padding: 1px 6px;
     border-radius: 5px;
-    font-size: 0.74rem;
+    font-size: 0.71rem;
     margin-left: 4px;
   }
 
   .topbar-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    gap: 6px;
+    flex-wrap: nowrap;
   }
 
   .top-select {
@@ -1934,8 +2136,9 @@
     color: #fff;
     border: 1px solid var(--border-strong);
     border-radius: 7px;
-    padding: 6px 10px;
-    font-size: 0.78rem;
+    padding: 4px 8px;
+    font-size: 0.74rem;
+    max-width: 220px;
   }
 
   .segmented-mode {

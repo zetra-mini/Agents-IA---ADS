@@ -1,0 +1,116 @@
+{
+  "active_brain_id": "brain_veiculos_repasse_financiamento",
+  "brains": [
+    {
+      "business_name": "AutoPrime Curitiba & Região",
+      "industry": "Automotivo / Financiamento e Seminovos",
+      "niche": "Veículos revisados e repasse de financiamento com aprovação rápida em Curitiba e Região Metropolitana",
+      "service_area": "Curitiba, Campo Largo, São José dos Pinhais",
+      "tone": "Direto, confiável, transparente e focado em oportunidade real.",
+      "writing_style": "Frases curtas, destaque para parcela acessível, aprovação rápida pelo WhatsApp e garantia de procedência.",
+      "audience_who": "Homens e mulheres de 23 a 58 anos buscando trocar de carro, assumir financiamento ou comprar sem entrada alta.",
+      "audience_pain_points": [
+        "Medo de burocracia bancária ou score travando financiamento",
+        "Parcelas abusivas em financiamentos tradicionais",
+        "Receio de carros sem procedência ou com defeito oculto"
+      ],
+      "audience_desires": [
+        "Sair de carro novo ainda esta semana com parcela que cabe no bolso",
+        "Simular financiamento rápido direto pelo WhatsApp sem sair de casa",
+        "Negociar com loja física de confiança na própria região"
+      ],
+      "usp": "Simulação em 2 minutos pelo WhatsApp, veículos periciados e as melhores condições de repasse e financiamento da região.",
+      "key_benefits": [
+        "Aprovação facilitada e análise imediata pelo WhatsApp",
+        "Estoque revisado com laudo cautelar aprovado",
+        "Aceitamos seu usado na troca com avaliação justa"
+      ],
+      "words_to_use": [
+        "Simule no WhatsApp",
+        "Parcelas que cabem no bolso",
+        "Laudo aprovado",
+        "Curitiba e Região",
+        "Pronta entrega"
+      ],
+      "words_to_avoid": [
+        "Milagre",
+        "100% garantido sem análise",
+        "Grátis"
+      ],
+      "objections": [
+        "Será que aprova no meu CPF?",
+        "O carro tem garantia?"
+      ],
+      "objection_handling": [
+        "Fazemos a pré-análise em 2 minutos no WhatsApp em múltiplos bancos parceiros",
+        "Todos os veículos possuem laudo cautelar e garantia de loja"
+      ],
+      "competitors": [
+        "Concessionárias tradicionais lentas",
+        "Anúncios particulares sem garantia"
+      ],
+      "differentiators": [
+        "Atendimento imediato no WhatsApp",
+        "Condições reais de repasse e financiamento"
+      ],
+      "id": "brain_veiculos_repasse_financiamento",
+      "template_slug": "veiculos_repasse_financiamento",
+      "updated_at": 1794603427
+    },
+    {
+      "business_name": "Panificadora e Pizzaria Bom Pão",
+      "industry": "Gastronomia / Panificadora e Pizzaria",
+      "niche": "Pizzas artesanais assadas na hora, pães quentinhos e confeitaria fresca com entrega rápida na região",
+      "service_area": "Curitiba e Região",
+      "tone": "Acolhedor, apetitoso, familiar e irresistível.",
+      "writing_style": "Sensorial, tempo presente, verbos que dão água na boca e chamada direta para pedir agora.",
+      "audience_who": "Famílias e moradores num raio de 8km, 20 a 60 anos, buscando jantar prático, pizza de qualidade ou café da tarde.",
+      "audience_pain_points": [
+        "Entrega demorada que chega fria",
+        "Pizzas com pouco recheio e massa borrachuda",
+        "Falta de tempo para cozinhar depois do trabalho"
+      ],
+      "audience_desires": [
+        "Pizza quentinha com borda recheada chegando rápido em casa",
+        "Produtos frescos feitos no dia com ingredientes selecionados",
+        "Pedir em 1 clique pelo WhatsApp sem taxa abusiva"
+      ],
+      "usp": "Massa artesanal de fermentação perfeita, recheio generoso de verdade e entrega quentinha direto do forno para sua mesa.",
+      "key_benefits": [
+        "Ingredientes frescos e queijo de verdade em todas as pizzas",
+        "Forno de alta temperatura e entrega expressa no bairro",
+        "Combo família com refrigerante ou borda recheada no pedido direto"
+      ],
+      "words_to_use": [
+        "Saindo do forno agora",
+        "Borda recheada",
+        "Peça no WhatsApp",
+        "Massa artesanal",
+        "Hoje à noite"
+      ],
+      "words_to_avoid": [
+        "A melhor do mundo",
+        "Comida barata"
+      ],
+      "objections": [
+        "Demora muito para entregar?",
+        "Tem promoção hoje?"
+      ],
+      "objection_handling": [
+        "Entrega expressa no seu bairro em até 40 minutos",
+        "Combo especial para pedidos diretos no WhatsApp"
+      ],
+      "competitors": [
+        "Redes de fast-food padronizadas",
+        "Pizzarias com entrega lenta"
+      ],
+      "differentiators": [
+        "Receita tradicional da casa",
+        "Atendimento rápido e recheio farto"
+      ],
+      "id": "brain_restaurante_pizzaria_local",
+      "template_slug": "restaurante_pizzaria_local",
+      "updated_at": 1794603427
+    }
+  ]
+}
