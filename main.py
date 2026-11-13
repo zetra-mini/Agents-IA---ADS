@@ -319,6 +319,54 @@ async def listar_campanhas_hub() -> list[dict[str, Any]]:
     return await get_meta_hub().list_campaigns()
 
 
+@app.get("/meta/adsets")
+async def listar_conjuntos_hub() -> list[dict[str, Any]]:
+    """Lista conjuntos de anúncios (AdSets) no padrão Gerenciador de Anúncios."""
+    return await get_meta_hub().list_adsets()
+
+
+@app.get("/meta/ads")
+async def listar_anuncios_hub() -> list[dict[str, Any]]:
+    """Lista anúncios (Ads) com criativo, título, copy, CTR, conversões e vinculações."""
+    return await get_meta_hub().list_ads()
+
+
+@app.patch("/meta/adsets/{adset_id}/status")
+async def alterar_status_adset(adset_id: str, body: StatusCampanhaPatch) -> dict[str, Any]:
+    """Ativa ou pausa um conjunto de anúncios."""
+    try:
+        return await get_meta_hub().update_adset_status(adset_id, body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/meta/ads/{ad_id}/status")
+async def alterar_status_ad(ad_id: str, body: StatusCampanhaPatch) -> dict[str, Any]:
+    """Ativa ou pausa um anúncio."""
+    try:
+        return await get_meta_hub().update_ad_status(ad_id, body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/meta/adsets/{adset_id}")
+async def excluir_adset(adset_id: str) -> dict[str, Any]:
+    """Exclui ou arquiva um conjunto de anúncios."""
+    try:
+        return await get_meta_hub().delete_adset(adset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/meta/ads/{ad_id}")
+async def excluir_ad(ad_id: str) -> dict[str, Any]:
+    """Exclui ou arquiva um anúncio."""
+    try:
+        return await get_meta_hub().delete_ad(ad_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/meta/copilot")
 async def obter_relatorio_copilot() -> dict[str, Any]:
     """Retorna o relatório do Robô Otimizador estilo Hackr Ads / AdSimples + TheMattBerman/meta-ads-kit."""

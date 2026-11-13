@@ -30,6 +30,9 @@
   });
 
   let campanhas = $state([]);
+  let adsets = $state([]);
+  let ads = $state([]);
+  let activeLevelTab = $state('campaigns'); // 'campaigns' | 'adsets' | 'ads'
   let copilot = $state(null);
   let publicos = $state([]);
   let chartMetric = $state('spend'); // 'spend' | 'conversions' | 'roas'
@@ -39,6 +42,11 @@
   let showChatDrawer = $state(false);
   let buscaCampanha = $state('');
   let filtroStatus = $state('TODAS'); // 'TODAS' | 'ACTIVE' | 'PAUSED'
+  let buscaAdset = $state('');
+  let filtroStatusAdset = $state('TODAS'); // 'TODAS' | 'ACTIVE' | 'PAUSED'
+  let buscaAd = $state('');
+  let filtroStatusAd = $state('TODAS'); // 'TODAS' | 'ACTIVE' | 'PAUSED'
+  let adModalPreview = $state(null); // Prévia de Anúncio / Criativo estilo Feed
   let tokenInput = $state('');
   let accountIdInput = $state('');
   let accountNameInput = $state('');
@@ -79,6 +87,48 @@
           (c.name || '').toLowerCase().includes(termo) ||
           (c.id || '').toLowerCase().includes(termo) ||
           (c.objective || '').toLowerCase().includes(termo)
+      );
+    }
+    return lista;
+  });
+
+  const adsetsFiltrados = $derived.by(() => {
+    let lista = adsets;
+    if (filtroStatusAdset === 'ACTIVE') {
+      lista = lista.filter((a) => a.status === 'ACTIVE');
+    } else if (filtroStatusAdset === 'PAUSED') {
+      lista = lista.filter((a) => a.status === 'PAUSED');
+    }
+    if (buscaAdset.trim()) {
+      const termo = buscaAdset.trim().toLowerCase();
+      lista = lista.filter(
+        (a) =>
+          (a.name || '').toLowerCase().includes(termo) ||
+          (a.campaign_name || '').toLowerCase().includes(termo) ||
+          (a.id || '').toLowerCase().includes(termo) ||
+          (a.locations || []).some((l) => l.toLowerCase().includes(termo))
+      );
+    }
+    return lista;
+  });
+
+  const adsFiltrados = $derived.by(() => {
+    let lista = ads;
+    if (filtroStatusAd === 'ACTIVE') {
+      lista = lista.filter((a) => a.status === 'ACTIVE');
+    } else if (filtroStatusAd === 'PAUSED') {
+      lista = lista.filter((a) => a.status === 'PAUSED');
+    }
+    if (buscaAd.trim()) {
+      const termo = buscaAd.trim().toLowerCase();
+      lista = lista.filter(
+        (a) =>
+          (a.name || '').toLowerCase().includes(termo) ||
+          (a.headline || '').toLowerCase().includes(termo) ||
+          (a.primary_text || '').toLowerCase().includes(termo) ||
+          (a.campaign_name || '').toLowerCase().includes(termo) ||
+          (a.adset_name || '').toLowerCase().includes(termo) ||
+          (a.id || '').toLowerCase().includes(termo)
       );
     }
     return lista;
@@ -225,11 +275,13 @@
 
   async function carregarTudo() {
     try {
-      const [resHealth, resProv, resCon, resCamp, resCop, resPub, resCri] = await Promise.all([
+      const [resHealth, resProv, resCon, resCamp, resAdsets, resAds, resCop, resPub, resCri] = await Promise.all([
         fetch('/api/health'),
         fetch('/api/providers'),
         fetch('/api/meta/connection'),
         fetch('/api/meta/campaigns'),
+        fetch('/api/meta/adsets'),
+        fetch('/api/meta/ads'),
         fetch('/api/meta/copilot'),
         fetch('/api/meta/audiences-store'),
         fetch('/api/criativos'),
@@ -267,6 +319,8 @@
         }
       }
       if (resCamp.ok) campanhas = await resCamp.json();
+      if (resAdsets.ok) adsets = await resAdsets.json();
+      if (resAds.ok) ads = await resAds.json();
       if (resCop.ok) copilot = await resCop.json();
       if (resPub.ok) {
         const pubData = await resPub.json();
@@ -494,6 +548,78 @@
     } catch (err) {
       notify(err.message, 'error');
     }
+  }
+
+  async function alternarStatusAdset(adset) {
+    const statusAnterior = adset.status;
+    const novo = statusAnterior === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    adset.status = novo;
+    try {
+      const res = await fetch(`/api/meta/adsets/${adset.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: novo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'A Meta recusou a alteração de status do conjunto.');
+      notify(`Conjunto "${adset.name}" ${novo === 'ACTIVE' ? 'ativado' : 'pausado'}!`);
+      await carregarTudo();
+    } catch (err) {
+      adset.status = statusAnterior;
+      notify(`Erro: ${err.message}`, 'error');
+    }
+  }
+
+  async function alternarStatusAd(ad) {
+    const statusAnterior = ad.status;
+    const novo = statusAnterior === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    ad.status = novo;
+    try {
+      const res = await fetch(`/api/meta/ads/${ad.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: novo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'A Meta recusou a alteração de status do anúncio.');
+      notify(`Anúncio "${ad.name}" ${novo === 'ACTIVE' ? 'ativado' : 'pausado'}!`);
+      await carregarTudo();
+    } catch (err) {
+      ad.status = statusAnterior;
+      notify(`Erro: ${err.message}`, 'error');
+    }
+  }
+
+  async function excluirAdset(adset) {
+    if (!window.confirm(`Excluir o conjunto de anúncios "${adset.name}"?`)) return;
+    try {
+      const res = await fetch(`/api/meta/adsets/${adset.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Falha ao excluir conjunto.');
+      adsets = adsets.filter((a) => a.id !== adset.id);
+      notify(`Conjunto "${adset.name}" excluído.`);
+      await carregarTudo();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  }
+
+  async function excluirAd(ad) {
+    if (!window.confirm(`Excluir o anúncio "${ad.name}"?`)) return;
+    try {
+      const res = await fetch(`/api/meta/ads/${ad.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Falha ao excluir anúncio.');
+      ads = ads.filter((a) => a.id !== ad.id);
+      notify(`Anúncio "${ad.name}" excluído.`);
+      await carregarTudo();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  }
+
+  function abrirModalCriativo(ad) {
+    adModalPreview = ad;
   }
 
   async function editarOrcamentoPrompt(camp) {
@@ -951,22 +1077,62 @@
           </div>
         </section>
 
-        <!-- TABELA DE CAMPANHAS DO GERENCIADOR DE ANÚNCIOS -->
+        <!-- BARRA DOS 3 NÍVEIS OFICIAIS DO GERENCIADOR DE ANÚNCIOS (CAMPANHAS / CONJUNTOS / ANÚNCIOS) -->
+        <div class="meta-manager-level-tabs">
+          <button
+            type="button"
+            class="level-tab-btn"
+            class:active={activeLevelTab === 'campaigns'}
+            onclick={() => (activeLevelTab = 'campaigns')}
+          >
+            <span class="tab-level-icon">📊</span>
+            <span class="tab-level-text">Campanhas</span>
+            <span class="tab-level-badge">{campanhas.length}</span>
+          </button>
+          <button
+            type="button"
+            class="level-tab-btn"
+            class:active={activeLevelTab === 'adsets'}
+            onclick={() => (activeLevelTab = 'adsets')}
+          >
+            <span class="tab-level-icon">📁</span>
+            <span class="tab-level-text">Conjuntos de Anúncios</span>
+            <span class="tab-level-badge">{adsets.length}</span>
+          </button>
+          <button
+            type="button"
+            class="level-tab-btn"
+            class:active={activeLevelTab === 'ads'}
+            onclick={() => (activeLevelTab = 'ads')}
+          >
+            <span class="tab-level-icon">📢</span>
+            <span class="tab-level-text">Anúncios</span>
+            <span class="tab-level-badge">{ads.length}</span>
+          </button>
+        </div>
+
+        <!-- PAINEL PRINCIPAL DO GERENCIADOR DE ANÚNCIOS -->
         <section class="panel-card">
           <div class="panel-head">
             <div>
-              <h2>Campanhas Meta Ads ({campanhasFiltradas.length} de {campanhas.length})</h2>
+              {#if activeLevelTab === 'campaigns'}
+                <h2>Campanhas Meta Ads ({campanhasFiltradas.length} de {campanhas.length})</h2>
+              {:else if activeLevelTab === 'adsets'}
+                <h2>Conjuntos de Anúncios ({adsetsFiltrados.length} de {adsets.length})</h2>
+              {:else}
+                <h2>Anúncios ({adsFiltrados.length} de {ads.length})</h2>
+              {/if}
               <span class="panel-sub">
-                {connection.somente_dados_reais ? 'Exibindo exclusivamente dados reais da Conta Meta' : 'Modo demonstração sincronizado'}
+                {connection.somente_dados_reais ? 'Exibindo dados reais da Conta Meta' : 'Sincronizado com Meta Graph API & Sistema'}
               </span>
             </div>
             <div class="adsmanager-head-actions">
               <a
-                href={connection.selected_account_id ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${connection.selected_account_id.replace('act_', '')}` : 'https://adsmanager.facebook.com/'}
+                href={connection.selected_account_id ? `https://adsmanager.facebook.com/adsmanager/manage/${activeLevelTab}?act=${connection.selected_account_id.replace('act_', '')}` : 'https://adsmanager.facebook.com/'}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="btn-top ghost"
-                title="Abrir Gerenciador de Anúncios oficial no facebook.com"
+                title="Abrir no Gerenciador de Anúncios oficial"
               >
                 ↗️ Abrir Gerenciador Meta
               </a>
@@ -974,190 +1140,501 @@
                 🔄 Atualizar
               </button>
               <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
-                🪄 + Criar Campanha
+                🪄 + Nova Campanha
               </button>
             </div>
           </div>
 
-          <!-- BARRA DE FERRAMENTAS DO GERENCIADOR (FILTROS + BUSCA) -->
+          <!-- BARRA DE FERRAMENTAS DO GERENCIADOR (FILTROS + BUSCA CONFORME NÍVEL) -->
           <div class="adsmanager-toolbar">
-            <div class="status-filter-pills">
-              <button
-                type="button"
-                class="filter-pill"
-                class:active={filtroStatus === 'TODAS'}
-                onclick={() => (filtroStatus = 'TODAS')}
-              >
-                Todas ({campanhas.length})
-              </button>
-              <button
-                type="button"
-                class="filter-pill"
-                class:active={filtroStatus === 'ACTIVE'}
-                onclick={() => (filtroStatus = 'ACTIVE')}
-              >
-                🟢 Ativas ({campanhas.filter((c) => c.status === 'ACTIVE').length})
-              </button>
-              <button
-                type="button"
-                class="filter-pill"
-                class:active={filtroStatus === 'PAUSED'}
-                onclick={() => (filtroStatus = 'PAUSED')}
-              >
-                ⏸️ Pausadas ({campanhas.filter((c) => c.status === 'PAUSED').length})
-              </button>
-            </div>
+            {#if activeLevelTab === 'campaigns'}
+              <div class="status-filter-pills">
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatus === 'TODAS'}
+                  onclick={() => (filtroStatus = 'TODAS')}
+                >
+                  Todas ({campanhas.length})
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatus === 'ACTIVE'}
+                  onclick={() => (filtroStatus = 'ACTIVE')}
+                >
+                  🟢 Ativas ({campanhas.filter((c) => c.status === 'ACTIVE').length})
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatus === 'PAUSED'}
+                  onclick={() => (filtroStatus = 'PAUSED')}
+                >
+                  ⏸️ Pausadas ({campanhas.filter((c) => c.status === 'PAUSED').length})
+                </button>
+              </div>
 
-            <div class="search-box">
-              <input
-                type="text"
-                placeholder="🔍 Pesquisar campanha por nome ou ID..."
-                bind:value={buscaCampanha}
-              />
-              {#if buscaCampanha}
-                <button type="button" class="search-clear" onclick={() => (buscaCampanha = '')}>✕</button>
-              {/if}
-            </div>
+              <div class="search-box">
+                <input
+                  type="text"
+                  placeholder="🔍 Pesquisar campanha por nome ou ID..."
+                  bind:value={buscaCampanha}
+                />
+                {#if buscaCampanha}
+                  <button type="button" class="search-clear" onclick={() => (buscaCampanha = '')}>✕</button>
+                {/if}
+              </div>
+
+            {:else if activeLevelTab === 'adsets'}
+              <div class="status-filter-pills">
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatusAdset === 'TODAS'}
+                  onclick={() => (filtroStatusAdset = 'TODAS')}
+                >
+                  Todos ({adsets.length})
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatusAdset === 'ACTIVE'}
+                  onclick={() => (filtroStatusAdset = 'ACTIVE')}
+                >
+                  🟢 Ativos ({adsets.filter((a) => a.status === 'ACTIVE').length})
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatusAdset === 'PAUSED'}
+                  onclick={() => (filtroStatusAdset = 'PAUSED')}
+                >
+                  ⏸️ Pausados ({adsets.filter((a) => a.status === 'PAUSED').length})
+                </button>
+              </div>
+
+              <div class="search-box">
+                <input
+                  type="text"
+                  placeholder="🔍 Pesquisar conjunto por nome, cidade ou ID..."
+                  bind:value={buscaAdset}
+                />
+                {#if buscaAdset}
+                  <button type="button" class="search-clear" onclick={() => (buscaAdset = '')}>✕</button>
+                {/if}
+              </div>
+
+            {:else}
+              <div class="status-filter-pills">
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatusAd === 'TODAS'}
+                  onclick={() => (filtroStatusAd = 'TODAS')}
+                >
+                  Todos ({ads.length})
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatusAd === 'ACTIVE'}
+                  onclick={() => (filtroStatusAd = 'ACTIVE')}
+                >
+                  🟢 Ativos ({ads.filter((a) => a.status === 'ACTIVE').length})
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill"
+                  class:active={filtroStatusAd === 'PAUSED'}
+                  onclick={() => (filtroStatusAd = 'PAUSED')}
+                >
+                  ⏸️ Pausados ({ads.filter((a) => a.status === 'PAUSED').length})
+                </button>
+              </div>
+
+              <div class="search-box">
+                <input
+                  type="text"
+                  placeholder="🔍 Pesquisar anúncio por título, copy ou ID..."
+                  bind:value={buscaAd}
+                />
+                {#if buscaAd}
+                  <button type="button" class="search-clear" onclick={() => (buscaAd = '')}>✕</button>
+                {/if}
+              </div>
+            {/if}
           </div>
 
-          {#if campanhasFiltradas.length === 0}
-            <div class="empty-state">
-              {#if campanhas.length === 0}
-                <h3>Nenhuma campanha real carregada neste momento</h3>
-                <p>
-                  Você está no modo <strong>Somente Dados Reais</strong>. Conecte seu Token da Meta API em <strong>⚙️ Configurações</strong>, sincronize do navegador ou crie uma campanha em <strong>🪄 Criação Assistida</strong>.
-                </p>
+          <!-- NÍVEL 1: TABELA DE CAMPANHAS -->
+          {#if activeLevelTab === 'campaigns'}
+            {#if campanhasFiltradas.length === 0}
+              <div class="empty-state">
+                {#if campanhas.length === 0}
+                  <h3>Nenhuma campanha carregada neste momento</h3>
+                  <p>Crie uma campanha em <strong>🪄 Criação Assistida</strong> ou conecte sua Conta Meta.</p>
+                  <div class="empty-actions">
+                    <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
+                      🪄 Criar Campanha Assistida Agora
+                    </button>
+                  </div>
+                {:else}
+                  <h3>Nenhuma campanha encontrada com o filtro atual</h3>
+                  <p>Altere o filtro de status ou limpe o termo pesquisado.</p>
+                  <div class="empty-actions">
+                    <button type="button" class="btn-top ghost" onclick={() => { filtroStatus = 'TODAS'; buscaCampanha = ''; }}>
+                      Limpar Filtros
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <div class="table-scroll">
+                <table class="clean-table ads-manager-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 70px;">Status</th>
+                      <th>Campanha</th>
+                      <th>Orçamento</th>
+                      <th class="num">Gasto 7d</th>
+                      <th class="num">CTR</th>
+                      <th class="num">CPA</th>
+                      <th class="num">ROAS</th>
+                      <th>Diagnóstico IA</th>
+                      <th class="right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each campanhasFiltradas as camp}
+                      <tr class:row-paused={camp.status === 'PAUSED'}>
+                        <td>
+                          <button
+                            type="button"
+                            class="toggle-switch"
+                            class:on={camp.status === 'ACTIVE'}
+                            onclick={() => alternarStatusCampanha(camp)}
+                            title={camp.status === 'ACTIVE' ? 'Clique para PAUSAR a veiculação' : 'Clique para ATIVAR a veiculação'}
+                            aria-label={`Status da campanha: ${camp.status}`}
+                          >
+                            <span class="knob"></span>
+                          </button>
+                        </td>
+                        <td>
+                          <div class="c-name">{camp.name}</div>
+                          <div class="c-sub">
+                            <span class="origin-tag" class:real={camp.is_real}>
+                              {camp.is_real ? 'CONTA REAL' : 'DEMO'}
+                            </span>
+                            · {camp.objective.replace('OUTCOME_', '')} · 📍 {(camp.locations || []).join(', ')}
+                            {#if camp.id}
+                              <code class="camp-id-code">ID: {camp.id}</code>
+                            {/if}
+                          </div>
+                        </td>
+                        <td>
+                          <div class="budget-cell">
+                            <strong>R$ {camp.daily_budget.toFixed(2)}</strong><span class="c-sub">/dia</span>
+                            <button
+                              type="button"
+                              class="btn-edit-budget"
+                              onclick={() => editarOrcamentoPrompt(camp)}
+                              title="Editar orçamento diário da campanha"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                          <span class="btype-pill">{camp.budget_type}</span>
+                        </td>
+                        <td class="num">R$ {camp.totals.spend.toFixed(2)}</td>
+                        <td class="num">{camp.totals.ctr}%</td>
+                        <td class="num">R$ {camp.totals.cpa}</td>
+                        <td class="num strong-roas">{camp.totals.roas}x</td>
+                        <td>
+                          <span class="health-pill {camp.health_color}">{camp.health_tag}</span>
+                        </td>
+                        <td class="right">
+                          <div class="row-actions">
+                            <button
+                              type="button"
+                              class="mini-btn"
+                              onclick={() => alternarStatusCampanha(camp)}
+                              title={camp.status === 'ACTIVE' ? 'Pausar campanha' : 'Ativar campanha'}
+                            >
+                              {camp.status === 'ACTIVE' ? '⏸️ Pausar' : '▶️ Ativar'}
+                            </button>
+                            <button
+                              type="button"
+                              class="mini-btn up"
+                              onclick={() => escalarOrcamento(camp, 1.2)}
+                              title="Aumentar orçamento em +20%"
+                            >
+                              +20%
+                            </button>
+                            <button
+                              type="button"
+                              class="mini-btn down"
+                              onclick={() => escalarOrcamento(camp, 0.8)}
+                              title="Reduzir orçamento em -20%"
+                            >
+                              -20%
+                            </button>
+                            <button
+                              type="button"
+                              class="mini-btn dup"
+                              onclick={() => duplicarCampanha(camp)}
+                              title="Duplicar esta campanha"
+                            >
+                              📋 Duplicar
+                            </button>
+                            <button
+                              type="button"
+                              class="mini-btn del"
+                              onclick={() => excluirCampanha(camp)}
+                              title="Excluir campanha da conta"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+
+          <!-- NÍVEL 2: TABELA DE CONJUNTOS DE ANÚNCIOS (ADSETS) -->
+          {:else if activeLevelTab === 'adsets'}
+            {#if adsetsFiltrados.length === 0}
+              <div class="empty-state">
+                <h3>Nenhum conjunto de anúncios encontrado</h3>
+                <p>Crie uma campanha na <strong>🪄 Criação Assistida</strong> ou ajuste o filtro.</p>
                 <div class="empty-actions">
-                  <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
-                    🪄 Criar Campanha Assistida Agora
-                  </button>
-                  <button type="button" class="btn-top ghost" onclick={() => definirModoDadosReais(false)}>
-                    Ver Campanhas de Demonstração
-                  </button>
-                </div>
-              {:else}
-                <h3>Nenhuma campanha encontrada com o filtro atual</h3>
-                <p>Altere o filtro de status ou limpe o termo de busca pesquisado.</p>
-                <div class="empty-actions">
-                  <button type="button" class="btn-top ghost" onclick={() => { filtroStatus = 'TODAS'; buscaCampanha = ''; }}>
+                  <button type="button" class="btn-top ghost" onclick={() => { filtroStatusAdset = 'TODAS'; buscaAdset = ''; }}>
                     Limpar Filtros
                   </button>
                 </div>
-              {/if}
-            </div>
-          {:else}
-            <div class="table-scroll">
-              <table class="clean-table ads-manager-table">
-                <thead>
-                  <tr>
-                    <th style="width: 70px;">Status</th>
-                    <th>Campanha</th>
-                    <th>Orçamento</th>
-                    <th class="num">Gasto 7d</th>
-                    <th class="num">CTR</th>
-                    <th class="num">CPA</th>
-                    <th class="num">ROAS</th>
-                    <th>Diagnóstico IA</th>
-                    <th class="right">Ações do Gerenciador</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each campanhasFiltradas as camp}
-                    <tr class:row-paused={camp.status === 'PAUSED'}>
-                      <td>
-                        <button
-                          type="button"
-                          class="toggle-switch"
-                          class:on={camp.status === 'ACTIVE'}
-                          onclick={() => alternarStatusCampanha(camp)}
-                          title={camp.status === 'ACTIVE' ? 'Clique para PAUSAR a veiculação desta campanha' : 'Clique para ATIVAR a veiculação desta campanha'}
-                          aria-label={`Status da campanha: ${camp.status}`}
-                        >
-                          <span class="knob"></span>
-                        </button>
-                      </td>
-                      <td>
-                        <div class="c-name">{camp.name}</div>
-                        <div class="c-sub">
-                          <span class="origin-tag" class:real={camp.is_real}>
-                            {camp.is_real ? 'CONTA REAL' : 'DEMO'}
-                          </span>
-                          · {camp.objective.replace('OUTCOME_', '')} · 📍 {(camp.locations || []).join(', ')}
-                          {#if camp.id}
-                            <code class="camp-id-code">ID: {camp.id}</code>
-                          {/if}
-                        </div>
-                      </td>
-                      <td>
-                        <div class="budget-cell">
-                          <strong>R$ {camp.daily_budget.toFixed(2)}</strong><span class="c-sub">/dia</span>
-                          <button
-                            type="button"
-                            class="btn-edit-budget"
-                            onclick={() => editarOrcamentoPrompt(camp)}
-                            title="Editar orçamento diário da campanha"
-                          >
-                            ✏️
-                          </button>
-                        </div>
-                        <span class="btype-pill">{camp.budget_type}</span>
-                      </td>
-                      <td class="num">R$ {camp.totals.spend.toFixed(2)}</td>
-                      <td class="num">{camp.totals.ctr}%</td>
-                      <td class="num">R$ {camp.totals.cpa}</td>
-                      <td class="num strong-roas">{camp.totals.roas}x</td>
-                      <td>
-                        <span class="health-pill {camp.health_color}">{camp.health_tag}</span>
-                      </td>
-                      <td class="right">
-                        <div class="row-actions">
-                          <button
-                            type="button"
-                            class="mini-btn"
-                            onclick={() => alternarStatusCampanha(camp)}
-                            title={camp.status === 'ACTIVE' ? 'Pausar campanha' : 'Ativar campanha'}
-                          >
-                            {camp.status === 'ACTIVE' ? '⏸️ Pausar' : '▶️ Ativar'}
-                          </button>
-                          <button
-                            type="button"
-                            class="mini-btn up"
-                            onclick={() => escalarOrcamento(camp, 1.2)}
-                            title="Aumentar orçamento em +20%"
-                          >
-                            +20%
-                          </button>
-                          <button
-                            type="button"
-                            class="mini-btn down"
-                            onclick={() => escalarOrcamento(camp, 0.8)}
-                            title="Reduzir orçamento em -20%"
-                          >
-                            -20%
-                          </button>
-                          <button
-                            type="button"
-                            class="mini-btn dup"
-                            onclick={() => duplicarCampanha(camp)}
-                            title="Duplicar esta campanha (igual no Gerenciador Meta)"
-                          >
-                            📋 Duplicar
-                          </button>
-                          <button
-                            type="button"
-                            class="mini-btn del"
-                            onclick={() => excluirCampanha(camp)}
-                            title="Excluir campanha da conta"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
+              </div>
+            {:else}
+              <div class="table-scroll">
+                <table class="clean-table ads-manager-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 70px;">Status</th>
+                      <th>Conjunto de Anúncios</th>
+                      <th>Campanha Pai</th>
+                      <th>Orçamento</th>
+                      <th>Otimização</th>
+                      <th>Segmentação</th>
+                      <th class="num">Gasto</th>
+                      <th class="num">Resultados</th>
+                      <th class="right">Ações</th>
                     </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {#each adsetsFiltrados as adset}
+                      <tr class:row-paused={adset.status === 'PAUSED'}>
+                        <td>
+                          <button
+                            type="button"
+                            class="toggle-switch"
+                            class:on={adset.status === 'ACTIVE'}
+                            onclick={() => alternarStatusAdset(adset)}
+                            title={adset.status === 'ACTIVE' ? 'Clique para PAUSAR o conjunto' : 'Clique para ATIVAR o conjunto'}
+                            aria-label={`Status do conjunto: ${adset.status}`}
+                          >
+                            <span class="knob"></span>
+                          </button>
+                        </td>
+                        <td>
+                          <div class="c-name">{adset.name}</div>
+                          <div class="c-sub">
+                            <span class="origin-tag" class:real={adset.is_real}>
+                              {adset.is_real ? 'CONTA REAL' : 'SISTEMA'}
+                            </span>
+                            {#if adset.id}
+                              <code class="camp-id-code">ID: {adset.id}</code>
+                            {/if}
+                          </div>
+                        </td>
+                        <td>
+                          <div class="c-sub" style="font-weight: 550; color: #cbd5e1;">{adset.campaign_name || '—'}</div>
+                        </td>
+                        <td>
+                          {#if adset.daily_budget > 0}
+                            <div class="budget-cell">
+                              <strong>R$ {adset.daily_budget.toFixed(2)}</strong><span class="c-sub">/dia</span>
+                            </div>
+                          {:else}
+                            <span class="btype-pill">CBO (Campanha)</span>
+                          {/if}
+                        </td>
+                        <td>
+                          <span class="opt-goal-badge">{adset.optimization_goal}</span>
+                          <div class="c-sub">Cobrança: {adset.billing_event}</div>
+                        </td>
+                        <td>
+                          <div class="c-sub">📍 {(adset.locations || []).join(', ')}</div>
+                          <div class="c-sub">🎂 {adset.min_age} - {adset.max_age} anos</div>
+                        </td>
+                        <td class="num">R$ {adset.spend.toFixed(2)}</td>
+                        <td class="num">
+                          <strong>{adset.conversions}</strong>
+                          <div class="c-sub">CPA: R$ {adset.cpa.toFixed(2)}</div>
+                        </td>
+                        <td class="right">
+                          <div class="row-actions">
+                            <button
+                              type="button"
+                              class="mini-btn"
+                              onclick={() => alternarStatusAdset(adset)}
+                              title={adset.status === 'ACTIVE' ? 'Pausar conjunto' : 'Ativar conjunto'}
+                            >
+                              {adset.status === 'ACTIVE' ? '⏸️ Pausar' : '▶️ Ativar'}
+                            </button>
+                            <button
+                              type="button"
+                              class="mini-btn del"
+                              onclick={() => excluirAdset(adset)}
+                              title="Excluir conjunto"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+
+          <!-- NÍVEL 3: TABELA DE ANÚNCIOS (ADS COM PRÉVIA VISUAL DO CRIATIVO) -->
+          {:else}
+            {#if adsFiltrados.length === 0}
+              <div class="empty-state">
+                <h3>Nenhum anúncio encontrado</h3>
+                <p>Crie uma campanha na <strong>🪄 Criação Assistida</strong> para gerar os criativos e anúncios.</p>
+                <div class="empty-actions">
+                  <button type="button" class="btn-cta" onclick={() => (activeNav = 'assistida')}>
+                    🪄 Criar Anúncios Assistidos
+                  </button>
+                </div>
+              </div>
+            {:else}
+              <div class="table-scroll">
+                <table class="clean-table ads-manager-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 70px;">Status</th>
+                      <th style="width: 54px;">Criativo</th>
+                      <th>Anúncio</th>
+                      <th>Título & Copy</th>
+                      <th>CTA</th>
+                      <th class="num">Gasto</th>
+                      <th class="num">CTR</th>
+                      <th class="num">Conversões</th>
+                      <th class="right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each adsFiltrados as ad}
+                      <tr class:row-paused={ad.status === 'PAUSED'}>
+                        <td>
+                          <button
+                            type="button"
+                            class="toggle-switch"
+                            class:on={ad.status === 'ACTIVE'}
+                            onclick={() => alternarStatusAd(ad)}
+                            title={ad.status === 'ACTIVE' ? 'Clique para PAUSAR o anúncio' : 'Clique para ATIVAR o anúncio'}
+                            aria-label={`Status do anúncio: ${ad.status}`}
+                          >
+                            <span class="knob"></span>
+                          </button>
+                        </td>
+                        <td>
+                          <div
+                            class="ad-thumb-box"
+                            onclick={() => abrirModalCriativo(ad)}
+                            title="Clique para ver a prévia completa deste criativo"
+                            role="button"
+                            tabindex="0"
+                            onkeydown={(e) => { if (e.key === 'Enter') abrirModalCriativo(ad); }}
+                          >
+                            {#if ad.image_url}
+                              <img src={ad.image_url} alt={ad.name} class="ad-thumb-img" />
+                            {:else if ad.creative_file}
+                              <img
+                                src={`/api/criativos/arquivo/${ad.creative_file}`}
+                                alt={ad.name}
+                                class="ad-thumb-img"
+                                onerror={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'flex'; }}
+                              />
+                              <div class="ad-thumb-fallback" style="display: none;">🎨</div>
+                            {:else}
+                              <div class="ad-thumb-fallback">🖼️</div>
+                            {/if}
+                          </div>
+                        </td>
+                        <td>
+                          <div class="c-name">{ad.name}</div>
+                          <div class="c-sub">
+                            <span class="origin-tag" class:real={ad.is_real}>
+                              {ad.is_real ? 'CONTA REAL' : 'SISTEMA'}
+                            </span>
+                            · 📁 {ad.adset_name || 'Conjunto'}
+                            {#if ad.id}
+                              <code class="camp-id-code">ID: {ad.id}</code>
+                            {/if}
+                          </div>
+                        </td>
+                        <td class="ad-copy-cell">
+                          <div class="ad-copy-title" title={ad.headline}>{ad.headline}</div>
+                          <div class="ad-copy-snippet" title={ad.primary_text}>{ad.primary_text}</div>
+                        </td>
+                        <td>
+                          <span class="cta-badge">{ad.call_to_action === 'LEARN_MORE' ? 'Saiba Mais' : ad.call_to_action}</span>
+                        </td>
+                        <td class="num">R$ {ad.spend.toFixed(2)}</td>
+                        <td class="num">{ad.ctr}%</td>
+                        <td class="num">
+                          <strong>{ad.conversions}</strong>
+                          <div class="c-sub">CPA: R$ {ad.cpa.toFixed(2)}</div>
+                        </td>
+                        <td class="right">
+                          <div class="row-actions">
+                            <button
+                              type="button"
+                              class="mini-btn preview"
+                              onclick={() => abrirModalCriativo(ad)}
+                              title="Visualizar criativo e texto no formato de anúncio"
+                            >
+                              👁️ Prévia
+                            </button>
+                            <button
+                              type="button"
+                              class="mini-btn"
+                              onclick={() => alternarStatusAd(ad)}
+                              title={ad.status === 'ACTIVE' ? 'Pausar anúncio' : 'Ativar anúncio'}
+                            >
+                              {ad.status === 'ACTIVE' ? '⏸️' : '▶️'}
+                            </button>
+                            <button
+                              type="button"
+                              class="mini-btn del"
+                              onclick={() => excluirAd(ad)}
+                              title="Excluir anúncio"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
           {/if}
         </section>
 
@@ -1919,6 +2396,117 @@
           {enviandoChat ? 'Processando...' : 'Enviar para o Assistente'}
         </button>
       </form>
+    </div>
+  </div>
+{/if}
+
+<!-- MODAL DE PRÉVIA DO ANÚNCIO (FORMATO FEED DO FACEBOOK / INSTAGRAM) -->
+{#if adModalPreview}
+  <div class="modal-backdrop" onclick={() => (adModalPreview = null)} role="presentation">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div
+      class="modal-card ad-preview-modal-card"
+      onclick={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+    >
+      <div class="modal-head">
+        <h3>📱 Prévia do Anúncio (Feed Facebook & Instagram)</h3>
+        <button type="button" class="modal-close" onclick={() => (adModalPreview = null)} aria-label="Fechar">✕</button>
+      </div>
+
+      <div class="feed-mockup-wrapper">
+        <div class="fb-feed-card">
+          <!-- Topo do post com página oficial -->
+          <div class="fb-post-header">
+            <div class="fb-avatar">
+              <span class="avatar-letter">{(connection.selected_account_name || 'Tv')[0]}</span>
+            </div>
+            <div class="fb-post-meta">
+              <div class="fb-page-name">{connection.selected_account_name || 'Tvshopdigital — Página Oficial'}</div>
+              <div class="fb-post-sub">Patrocinado · 🌐</div>
+            </div>
+          </div>
+
+          <!-- Texto principal / Copy -->
+          <div class="fb-post-body">
+            {adModalPreview.primary_text || 'Oportunidades exclusivas de repasse e financiamento com entrada facilitada.'}
+          </div>
+
+          <!-- Imagem / Criativo -->
+          <div class="fb-media-container">
+            {#if adModalPreview.image_url}
+              <img src={adModalPreview.image_url} alt={adModalPreview.name} class="fb-creative-img" />
+            {:else if adModalPreview.creative_file}
+              <img
+                src={`/api/criativos/arquivo/${adModalPreview.creative_file}`}
+                alt={adModalPreview.name}
+                class="fb-creative-img"
+                onerror={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling.style.display = 'flex';
+                }}
+              />
+              <div class="fb-placeholder-media" style="display: none;">
+                <span>🎨 {adModalPreview.creative_file}</span>
+              </div>
+            {:else}
+              <div class="fb-placeholder-media">
+                <span>🎨 Criativo em Alta Resolução</span>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Barra de Chamada para Ação / Link -->
+          <div class="fb-cta-bar">
+            <div class="fb-cta-info">
+              <span class="fb-domain">WHATSAPP.COM · OFERTA LIMITADA</span>
+              <strong class="fb-headline">{adModalPreview.headline || 'Assuma Parcelas que Cabem no Bolso'}</strong>
+            </div>
+            <button type="button" class="btn-meta-cta">
+              {adModalPreview.call_to_action === 'LEARN_MORE' ? 'Saiba Mais' : (adModalPreview.call_to_action || 'Saiba Mais')}
+            </button>
+          </div>
+        </div>
+
+        <!-- Painel lateral de detalhes técnicos do anúncio -->
+        <div class="ad-preview-details">
+          <h4>Detalhes do Anúncio</h4>
+          <div class="preview-detail-row">
+            <span class="detail-label">Nome:</span>
+            <strong>{adModalPreview.name}</strong>
+          </div>
+          <div class="preview-detail-row">
+            <span class="detail-label">ID do Anúncio:</span>
+            <code class="camp-id-code">{adModalPreview.id}</code>
+          </div>
+          <div class="preview-detail-row">
+            <span class="detail-label">Campanha Vinculada:</span>
+            <span style="color: #cbd5e1;">{adModalPreview.campaign_name || '—'}</span>
+          </div>
+          <div class="preview-detail-row">
+            <span class="detail-label">Conjunto de Anúncios:</span>
+            <span style="color: #cbd5e1;">{adModalPreview.adset_name || '—'}</span>
+          </div>
+          <div class="preview-detail-row">
+            <span class="detail-label">Status Atual:</span>
+            <span class="origin-tag" class:real={adModalPreview.status === 'ACTIVE'}>
+              {adModalPreview.status === 'ACTIVE' ? '🟢 ATIVO (Veiculando)' : '⏸️ PAUSADO (Rascunho)'}
+            </span>
+          </div>
+          <div class="preview-detail-row">
+            <span class="detail-label">Origem:</span>
+            <span class="origin-tag" class:real={adModalPreview.is_real}>{adModalPreview.origem_dados}</span>
+          </div>
+          <div class="preview-detail-row">
+            <span class="detail-label">Métricas Acumuladas:</span>
+            <span style="color: #94a3b8; font-size: 0.76rem;">
+              Gasto: R$ {adModalPreview.spend?.toFixed(2) || '0.00'} · {adModalPreview.clicks || 0} cliques · CTR {adModalPreview.ctr || 0}% · {adModalPreview.conversions || 0} conversões
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 {/if}
@@ -3755,5 +4343,294 @@
   .muted-p {
     color: var(--muted);
     font-size: 0.82rem;
+  }
+
+  /* ABAS DOS 3 NÍVEIS HIERÁRQUICOS DO GERENCIADOR DE ANÚNCIOS */
+  .meta-manager-level-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 18px 0 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 2px;
+  }
+
+  .level-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .level-tab-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .level-tab-btn.active {
+    color: #fff;
+    background: #111827;
+    border-color: var(--border);
+    border-bottom: 2px solid var(--primary);
+  }
+
+  .tab-level-icon {
+    font-size: 1rem;
+  }
+
+  .tab-level-badge {
+    background: #1f2937;
+    color: #94a3b8;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .level-tab-btn.active .tab-level-badge {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  .opt-goal-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #1e293b;
+    color: #38bdf8;
+    border: 1px solid #334155;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .ad-thumb-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    background: #1e293b;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ad-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .ad-thumb-fallback {
+    font-size: 1.2rem;
+  }
+
+  .ad-copy-cell {
+    max-width: 280px;
+  }
+
+  .ad-copy-title {
+    font-weight: 650;
+    color: #f1f5f9;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ad-copy-snippet {
+    font-size: 0.72rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+
+  .cta-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #1e293b;
+    color: #38bdf8;
+    border: 1px solid #334155;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  /* MODAL DE PRÉVIA DO ANÚNCIO (FEED MOCKUP) */
+  .ad-preview-modal-card {
+    max-width: 820px;
+    width: 95%;
+  }
+
+  .feed-mockup-wrapper {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 20px;
+    margin-top: 14px;
+  }
+
+  @media (max-width: 768px) {
+    .feed-mockup-wrapper {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .fb-feed-card {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  }
+
+  .fb-post-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .fb-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb, #38bdf8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .fb-page-name {
+    font-weight: 600;
+    font-size: 0.86rem;
+    color: #fff;
+  }
+
+  .fb-post-sub {
+    font-size: 0.68rem;
+    color: #94a3b8;
+  }
+
+  .fb-post-body {
+    padding: 4px 14px 12px;
+    font-size: 0.82rem;
+    color: #e2e8f0;
+    line-height: 1.45;
+  }
+
+  .fb-media-container {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #1e293b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .fb-creative-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .fb-placeholder-media {
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  .fb-cta-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #1e293b;
+    border-top: 1px solid #334155;
+    gap: 8px;
+  }
+
+  .fb-cta-info {
+    overflow: hidden;
+  }
+
+  .fb-domain {
+    display: block;
+    font-size: 0.64rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .fb-headline {
+    display: block;
+    font-size: 0.82rem;
+    color: #fff;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+
+  .btn-meta-cta {
+    padding: 6px 12px;
+    background: #3b82f6;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.78rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .ad-preview-details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #0b0f19;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .ad-preview-details h4 {
+    margin: 0;
+    font-size: 0.92rem;
+    color: #fff;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+
+  .preview-detail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.8rem;
+  }
+
+  .detail-label {
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
   }
 </style>
