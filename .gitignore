@@ -9,12 +9,23 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 
-# Segredos e dados locais persistentes
+# Segredos, tokens e dados locais persistentes
 .env
+*.env.local
+*.env.*.local
 .meta_session.json
 browser_profile/
 criativos/*
 !criativos/README.md
+*.token
+*.session
+session_*.json
+credentials*.json
+storage_state.json
+auth.json
+*.pem
+*.key
+*.log
 
 # Ferramentas locais / SO
 .agents/

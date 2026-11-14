@@ -924,7 +924,7 @@
       <span class="conn-dot" class:connected={connection.connected}></span>
       <div class="sidebar-acc-info">
         <strong>{connection.selected_account_name || 'Conta dos anúncios'}</strong>
-        <code>{connection.selected_account_id || 'act_3339104319737592'}</code>
+        <code>{connection.selected_account_id || 'act_0000000000000000'}</code>
       </div>
     </div>
 
@@ -1165,7 +1165,7 @@
         >
           <span class="conn-dot" class:connected={connection.connected}></span>
           <span class="topbar-acc-title">{connection.selected_account_name || 'Conta dos anúncios'}</span>
-          <code>{connection.selected_account_id || 'act_3339104319737592'}</code>
+          <code>{connection.selected_account_id || 'act_0000000000000000'}</code>
         </button>
 
         <!-- Botão Assistente IA -->
@@ -1207,7 +1207,7 @@
             <h1>Gerenciador de Anúncios</h1>
             <p class="manager-page-subtitle">
               Conta ativa: <strong class="acc-highlight">{connection.selected_account_name || 'Conta dos anúncios'}</strong>
-              <code>{connection.selected_account_id || 'act_3339104319737592'}</code>
+              <code>{connection.selected_account_id || 'act_0000000000000000'}</code>
               <span class="sync-dot-badge">● Sincronizado Graph API v22.0</span>
             </p>
           </div>
@@ -2114,7 +2114,7 @@
                           }}
                         >
                           {#if metaPages.length === 0}
-                            <option value="111238241677173">Tvshopdigital (Página Oficial - 111238241677173)</option>
+                            <option value="page_demo_1">Página Oficial (Demo)</option>
                           {:else}
                             {#each metaPages as pag}
                               <option value={pag.id}>
@@ -2535,7 +2535,7 @@
                 <span class="info-label">Conta Selecionada:</span>
                 <span class="info-val">
                   <strong>{connection.selected_account_name || 'Conta dos anúncios'}</strong>
-                  <code class="act-pill">{connection.selected_account_id || 'act_3339104319737592'}</code>
+                  <code class="act-pill">{connection.selected_account_id || 'act_0000000000000000'}</code>
                 </span>
               </div>
 
@@ -2784,17 +2784,17 @@
           <!-- Topo do post com página oficial -->
           <div class="fb-post-header">
             <div class="fb-avatar">
-              <span class="avatar-letter">{(connection.selected_account_name || 'Tv')[0]}</span>
+              <span class="avatar-letter">{(connection.selected_account_name || 'AD')[0]}</span>
             </div>
             <div class="fb-post-meta">
-              <div class="fb-page-name">{connection.selected_account_name || 'Tvshopdigital — Página Oficial'}</div>
+              <div class="fb-page-name">{connection.selected_account_name || 'Página do Anúncio'}</div>
               <div class="fb-post-sub">Patrocinado · 🌐</div>
             </div>
           </div>
 
           <!-- Texto principal / Copy -->
           <div class="fb-post-body">
-            {adModalPreview.primary_text || 'Oportunidades exclusivas de repasse e financiamento com entrada facilitada.'}
+            {adModalPreview.primary_text || 'Exemplo de texto principal do anúncio e proposta de valor.'}
           </div>
 
           <!-- Imagem / Criativo -->
